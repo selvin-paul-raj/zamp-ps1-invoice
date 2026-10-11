@@ -1,0 +1,58 @@
+[
+  {
+    "id": "V001",
+    "name": "Acme Industrial Supplies Pvt Ltd",
+    "tax_id": "29AABCA1234F1Z5",
+    "currency": "INR",
+    "bank_account": "50100012345678",
+    "status": "active",
+    "aliases": [
+      "ACME IND"
+    ]
+  },
+  {
+    "id": "V002",
+    "name": "Brightline Logistics LLP",
+    "tax_id": "33AAGFB5521K1Z2",
+    "currency": "INR",
+    "bank_account": "39871200004411",
+    "status": "active",
+    "aliases": []
+  },
+  {
+    "id": "V003",
+    "name": "Nordic Sensors AB",
+    "tax_id": "SE556677889901",
+    "currency": "EUR",
+    "bank_account": "SE4550000000058398257466",
+    "status": "active",
+    "aliases": []
+  },
+  {
+    "id": "V004",
+    "name": "Pacific Packaging Co",
+    "tax_id": "US-94-1234567",
+    "currency": "USD",
+    "bank_account": "021000021-778812",
+    "status": "active",
+    "aliases": []
+  },
+  {
+    "id": "V005",
+    "name": "Shadow Traders",
+    "tax_id": "27AAQCS0001R1Z9",
+    "currency": "INR",
+    "bank_account": "11223344556677",
+    "status": "blocked",
+    "aliases": []
+  },
+  {
+    "id": "V006",
+    "name": "Kaveri Office Solutions Pvt Ltd",
+    "tax_id": "33AAKCK7788M1Z4",
+    "currency": "INR",
+    "bank_account": "60221100998877",
+    "status": "active",
+    "aliases": []
+  }
+]

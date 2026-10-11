@@ -1,0 +1,68 @@
+[
+  {
+    "ref": "HIST-0001",
+    "vendor_id": "V002",
+    "invoice_number": "BL-5521",
+    "po_number": "PO-1002",
+    "invoice_date": "2026-09-12",
+    "currency": "INR",
+    "total": "80640.00",
+    "status": "paid",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "FRT-BLR-CHN",
+        "description": "Freight trip Bengaluru-Chennai",
+        "quantity": 4,
+        "unit_price": "18000.00",
+        "tax_rate": "0.12",
+        "amount": "72000.00",
+        "tax_amount": "8640.00"
+      }
+    ]
+  },
+  {
+    "ref": "HIST-0002",
+    "vendor_id": "V001",
+    "invoice_number": "ACM-2201",
+    "po_number": "PO-1005",
+    "invoice_date": "2026-08-25",
+    "currency": "INR",
+    "total": "21240.00",
+    "status": "paid",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "WLD-ROD-3",
+        "description": "Welding rod 3.15mm (kg)",
+        "quantity": 400,
+        "unit_price": "45.00",
+        "tax_rate": "0.18",
+        "amount": "18000.00",
+        "tax_amount": "3240.00"
+      }
+    ]
+  },
+  {
+    "ref": "HIST-0003",
+    "vendor_id": "V001",
+    "invoice_number": "ACM-2219",
+    "po_number": "PO-1005",
+    "invoice_date": "2026-09-10",
+    "currency": "INR",
+    "total": "23895.00",
+    "status": "paid",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "WLD-ROD-3",
+        "description": "Welding rod 3.15mm (kg)",
+        "quantity": 450,
+        "unit_price": "45.00",
+        "tax_rate": "0.18",
+        "amount": "20250.00",
+        "tax_amount": "3645.00"
+      }
+    ]
+  }
+]

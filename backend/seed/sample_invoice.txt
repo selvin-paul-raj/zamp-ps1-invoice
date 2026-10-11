@@ -1,0 +1,8 @@
+Brightline Logistics LLP
+GSTIN 33AAGFB5521K1Z2
+Invoice No: BL-7777
+Invoice Date: 2026-10-10
+PO Number: PO-1002
+Currency INR
+Freight trip Bengaluru-Chennai x1 @ 18,000.00 + GST 12%
+Grand Total: INR 20,160.00

@@ -1,0 +1,188 @@
+[
+  {
+    "po_number": "PO-1001",
+    "vendor_id": "V001",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-09-01",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "STL-ROD-12",
+        "description": "Steel rod 12mm",
+        "quantity": 500,
+        "unit_price": "120.00",
+        "tax_rate": "0.18"
+      },
+      {
+        "line_no": 2,
+        "sku": "BOLT-M10",
+        "description": "Hex bolt M10",
+        "quantity": 2000,
+        "unit_price": "8.50",
+        "tax_rate": "0.18"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1002",
+    "vendor_id": "V002",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-08-20",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "FRT-BLR-CHN",
+        "description": "Freight trip Bengaluru-Chennai",
+        "quantity": 20,
+        "unit_price": "18000.00",
+        "tax_rate": "0.12"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1003",
+    "vendor_id": "V003",
+    "currency": "EUR",
+    "status": "open",
+    "po_date": "2026-09-05",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TMP-SNS-200",
+        "description": "Temperature sensor TS-200",
+        "quantity": 100,
+        "unit_price": "42.00",
+        "tax_rate": "0"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1004",
+    "vendor_id": "V004",
+    "currency": "USD",
+    "status": "open",
+    "po_date": "2026-09-10",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "BOX-CORR-L",
+        "description": "Corrugated box, large",
+        "quantity": 5000,
+        "unit_price": "0.80",
+        "tax_rate": "0"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1005",
+    "vendor_id": "V001",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-08-01",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "WLD-ROD-3",
+        "description": "Welding rod 3.15mm (kg)",
+        "quantity": 1000,
+        "unit_price": "45.00",
+        "tax_rate": "0.18"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1006",
+    "vendor_id": "V006",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-09-12",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "CHR-ERG",
+        "description": "Ergonomic chair",
+        "quantity": 20,
+        "unit_price": "9500.00",
+        "tax_rate": "0.18"
+      },
+      {
+        "line_no": 2,
+        "sku": "DSK-STD",
+        "description": "Standing desk",
+        "quantity": 10,
+        "unit_price": "14000.00",
+        "tax_rate": "0.18"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1007",
+    "vendor_id": "V002",
+    "currency": "INR",
+    "status": "closed",
+    "po_date": "2026-06-01",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "FRT-BLR-HYD",
+        "description": "Freight trip Bengaluru-Hyderabad",
+        "quantity": 5,
+        "unit_price": "21000.00",
+        "tax_rate": "0.12"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1008",
+    "vendor_id": "V006",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-09-20",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TNR-HP26",
+        "description": "Toner cartridge HP 26A",
+        "quantity": 40,
+        "unit_price": "3200.00",
+        "tax_rate": "0.18"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1009",
+    "vendor_id": "V001",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-09-22",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "STL-ROD-12",
+        "description": "Steel rod 12mm",
+        "quantity": 100,
+        "unit_price": "120.00",
+        "tax_rate": "0.18"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1010",
+    "vendor_id": "V004",
+    "currency": "USD",
+    "status": "open",
+    "po_date": "2026-09-25",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TAPE-48",
+        "description": "Packing tape 48mm",
+        "quantity": 600,
+        "unit_price": "1.20",
+        "tax_rate": "0"
+      }
+    ]
+  }
+]

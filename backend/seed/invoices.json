@@ -1,0 +1,583 @@
+[
+  {
+    "id": "INV-01",
+    "received_at": "2026-10-05T09:10:00+05:30",
+    "source": "portal",
+    "vendor_name": "Acme Industrial Supplies Pvt Ltd",
+    "vendor_tax_id": "29AABCA1234F1Z5",
+    "invoice_number": "ACM-2301",
+    "invoice_date": "2026-10-03",
+    "currency": "INR",
+    "po_number": "PO-1001",
+    "bank_account": "50100012345678",
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "STL-ROD-12",
+        "description": "Steel rod 12mm",
+        "quantity": 500,
+        "unit_price": "120.00",
+        "tax_rate": "0.18",
+        "amount": "60000.00",
+        "tax_amount": "10800.00"
+      },
+      {
+        "line_no": 2,
+        "sku": "BOLT-M10",
+        "description": "Hex bolt M10",
+        "quantity": 2000,
+        "unit_price": "8.50",
+        "tax_rate": "0.18",
+        "amount": "17000.00",
+        "tax_amount": "3060.00"
+      }
+    ],
+    "subtotal": "77000.00",
+    "tax_total": "13860.00",
+    "total": "90860.00",
+    "expected": {
+      "decision": "APPROVE",
+      "reason": null,
+      "story": "Happy path: clean 3-way match on two lines."
+    }
+  },
+  {
+    "id": "INV-02",
+    "received_at": "2026-10-05T10:00:00+05:30",
+    "source": "email",
+    "vendor_name": "Brightline Logistics LLP",
+    "vendor_tax_id": null,
+    "invoice_number": "BL-5602",
+    "invoice_date": "2026-10-02",
+    "currency": "INR",
+    "po_number": "PO-1002",
+    "bank_account": "39871200004411",
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "FRT-BLR-CHN",
+        "description": "Freight trip Bengaluru-Chennai",
+        "quantity": 3,
+        "unit_price": "18000.00",
+        "tax_rate": "0.12",
+        "amount": "54000.00",
+        "tax_amount": "6480.00"
+      }
+    ],
+    "subtotal": "54000.00",
+    "tax_total": "6480.00",
+    "total": "60480.00",
+    "expected": {
+      "decision": "APPROVE",
+      "reason": null,
+      "story": "Second invoice on a PO already partly paid; cumulative 7 of 12 received."
+    }
+  },
+  {
+    "id": "INV-03",
+    "received_at": "2026-10-05T11:30:00+05:30",
+    "source": "email",
+    "vendor_name": "Nordic Sensors A.B.",
+    "vendor_tax_id": null,
+    "invoice_number": "NS-2026-114",
+    "invoice_date": "2026-10-01",
+    "currency": "EUR",
+    "po_number": "PO-1003",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TMP-SNS-200",
+        "description": "Temperature sensor TS-200",
+        "quantity": 90,
+        "unit_price": "42.50",
+        "tax_rate": "0",
+        "amount": "3825.00",
+        "tax_amount": "0.00"
+      }
+    ],
+    "subtotal": "3825.00",
+    "tax_total": "0.00",
+    "total": "3825.00",
+    "expected": {
+      "decision": "APPROVE",
+      "reason": null,
+      "story": "Fuzzy vendor name; +1.19% price variance inside the 2% tolerance -> approve with lower confidence."
+    }
+  },
+  {
+    "id": "INV-04",
+    "received_at": "2026-10-06T09:00:00+05:30",
+    "source": "email",
+    "vendor_name": "Pacific Packaging Co",
+    "vendor_tax_id": null,
+    "invoice_number": "PP-7781",
+    "invoice_date": "2026-10-04",
+    "currency": "USD",
+    "po_number": "PO-1004",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "BOX-CORR-L",
+        "description": "Corrugated box, large",
+        "quantity": 3000,
+        "unit_price": "0.80",
+        "tax_rate": "0",
+        "amount": "2400.00",
+        "tax_amount": "0.00"
+      }
+    ],
+    "subtotal": "2400.00",
+    "tax_total": "0.00",
+    "total": "2400.00",
+    "expected": {
+      "decision": "APPROVE",
+      "reason": null,
+      "story": "Partial delivery billed correctly: 3,000 of 5,000 received and billed."
+    }
+  },
+  {
+    "id": "INV-05",
+    "received_at": "2026-10-06T09:30:00+05:30",
+    "source": "email",
+    "vendor_name": "Pacific Packaging Co",
+    "vendor_tax_id": null,
+    "invoice_number": "PP-7790",
+    "invoice_date": "2026-10-05",
+    "currency": "USD",
+    "po_number": "PO-1004",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "BOX-CORR-L",
+        "description": "Corrugated box, large",
+        "quantity": 2000,
+        "unit_price": "0.80",
+        "tax_rate": "0",
+        "amount": "1600.00",
+        "tax_amount": "0.00"
+      }
+    ],
+    "subtotal": "1600.00",
+    "tax_total": "0.00",
+    "total": "1600.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "QTY_EXCEEDS_RECEIPT",
+      "story": "Partial delivery: vendor bills the remaining 2,000 boxes that have not been received yet."
+    }
+  },
+  {
+    "id": "INV-06",
+    "received_at": "2026-10-06T12:00:00+05:30",
+    "source": "email",
+    "vendor_name": "Kaveri Office Solutions Pvt Ltd",
+    "vendor_tax_id": null,
+    "invoice_number": "KOS-0144",
+    "invoice_date": "2026-10-05",
+    "currency": "INR",
+    "po_number": "PO-1006",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "CHR-ERG",
+        "description": "Ergonomic chair",
+        "quantity": 20,
+        "unit_price": "10450.00",
+        "tax_rate": "0.18",
+        "amount": "209000.00",
+        "tax_amount": "37620.00"
+      }
+    ],
+    "subtotal": "209000.00",
+    "tax_total": "37620.00",
+    "total": "246620.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "PRICE_VARIANCE",
+      "story": "Price variance beyond tolerance: chairs billed 10% over PO price."
+    }
+  },
+  {
+    "id": "INV-07",
+    "received_at": "2026-10-07T08:45:00+05:30",
+    "source": "email",
+    "vendor_name": "ACME IND",
+    "vendor_tax_id": "29AABCA1234F1Z5",
+    "invoice_number": "ACM/2301",
+    "invoice_date": "2026-10-03",
+    "currency": "INR",
+    "po_number": "PO-1001",
+    "bank_account": null,
+    "notes": "Reminder: payment pending",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "STL-ROD-12",
+        "description": "Steel rod 12mm",
+        "quantity": 500,
+        "unit_price": "120.00",
+        "tax_rate": "0.18",
+        "amount": "60000.00",
+        "tax_amount": "10800.00"
+      },
+      {
+        "line_no": 2,
+        "sku": "BOLT-M10",
+        "description": "Hex bolt M10",
+        "quantity": 2000,
+        "unit_price": "8.50",
+        "tax_rate": "0.18",
+        "amount": "17000.00",
+        "tax_amount": "3060.00"
+      }
+    ],
+    "subtotal": "77000.00",
+    "tax_total": "13860.00",
+    "total": "90860.00",
+    "expected": {
+      "decision": "REJECT",
+      "reason": "DUPLICATE_INVOICE",
+      "story": "Duplicate invoice: INV-01 resent by email with a reformatted number."
+    }
+  },
+  {
+    "id": "INV-08",
+    "received_at": "2026-10-07T10:15:00+05:30",
+    "source": "email",
+    "vendor_name": "Brightline Logistics LLP",
+    "vendor_tax_id": null,
+    "invoice_number": "5521-OPS",
+    "invoice_date": "2026-10-06",
+    "currency": "INR",
+    "po_number": "PO-1002",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "FRT-BLR-CHN",
+        "description": "Freight trip Bengaluru-Chennai",
+        "quantity": 4,
+        "unit_price": "18000.00",
+        "tax_rate": "0.12",
+        "amount": "72000.00",
+        "tax_amount": "8640.00"
+      }
+    ],
+    "subtotal": "72000.00",
+    "tax_total": "8640.00",
+    "total": "80640.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "POSSIBLE_DUPLICATE",
+      "story": "Near-duplicate with reference drift: same amount as paid BL-5521 under a new number."
+    }
+  },
+  {
+    "id": "INV-09",
+    "received_at": "2026-10-07T11:00:00+05:30",
+    "source": "email",
+    "vendor_name": "Nordic Sensors AB",
+    "vendor_tax_id": null,
+    "invoice_number": "NS-2026-120",
+    "invoice_date": "2026-10-06",
+    "currency": "USD",
+    "po_number": "PO-1003",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TMP-SNS-200",
+        "description": "Temperature sensor TS-200",
+        "quantity": 10,
+        "unit_price": "42.00",
+        "tax_rate": "0",
+        "amount": "420.00",
+        "tax_amount": "0.00"
+      }
+    ],
+    "subtotal": "420.00",
+    "tax_total": "0.00",
+    "total": "420.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "CURRENCY_MISMATCH",
+      "story": "Currency mismatch: EUR PO billed in USD."
+    }
+  },
+  {
+    "id": "INV-10",
+    "received_at": "2026-10-07T15:20:00+05:30",
+    "source": "email",
+    "vendor_name": "Kaveri Office Solutions",
+    "vendor_tax_id": null,
+    "invoice_number": "KOS-0150",
+    "invoice_date": "2026-10-06",
+    "currency": "INR",
+    "po_number": null,
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": null,
+        "sku": "TNR-HP26",
+        "description": "Toner cartridge HP 26A",
+        "quantity": 10,
+        "unit_price": "3200.00",
+        "tax_rate": "0.18",
+        "amount": "32000.00",
+        "tax_amount": "5760.00"
+      }
+    ],
+    "subtotal": "32000.00",
+    "tax_total": "5760.00",
+    "total": "37760.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "PO_INFERRED",
+      "story": "Missing PO reference: implied PO-1008 inferred from the vendor's open POs, needs confirmation."
+    }
+  },
+  {
+    "id": "INV-11",
+    "received_at": "2026-10-08T09:05:00+05:30",
+    "source": "email",
+    "vendor_name": "Brightline Logistics LLP",
+    "vendor_tax_id": null,
+    "invoice_number": "BL-5630",
+    "invoice_date": "2026-10-07",
+    "currency": "INR",
+    "po_number": "PO-9999",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "FRT-BLR-CHN",
+        "description": "Freight trip Bengaluru-Chennai",
+        "quantity": 1,
+        "unit_price": "18000.00",
+        "tax_rate": "0.12",
+        "amount": "18000.00",
+        "tax_amount": "2160.00"
+      }
+    ],
+    "subtotal": "18000.00",
+    "tax_total": "2160.00",
+    "total": "20160.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "PO_NOT_FOUND",
+      "story": "Missing PO: the referenced PO does not exist in the register."
+    }
+  },
+  {
+    "id": "INV-12",
+    "received_at": "2026-10-08T10:40:00+05:30",
+    "source": "email",
+    "vendor_name": "Kaveri Office Solutions Pvt Ltd",
+    "vendor_tax_id": null,
+    "invoice_number": "KOS-0152",
+    "invoice_date": "2026-10-07",
+    "currency": "INR",
+    "po_number": "PO-1006",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 2,
+        "sku": "DSK-STD",
+        "description": "Standing desk",
+        "quantity": 6,
+        "unit_price": "14000.00",
+        "tax_rate": "0.28",
+        "amount": "84000.00",
+        "tax_amount": "23520.00"
+      }
+    ],
+    "subtotal": "84000.00",
+    "tax_total": "23520.00",
+    "total": "107520.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "TAX_RATE_MISMATCH",
+      "story": "Tax mismatch: 28% GST charged where the PO says 18%."
+    }
+  },
+  {
+    "id": "INV-13",
+    "received_at": "2026-10-08T12:00:00+05:30",
+    "source": "email",
+    "vendor_name": "Acme Industrial Supplies Pvt Ltd",
+    "vendor_tax_id": "29AABCA1234F1Z5",
+    "invoice_number": "ACM-2330",
+    "invoice_date": "2026-10-07",
+    "currency": "INR",
+    "po_number": "PO-1005",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "WLD-ROD-3",
+        "description": "Welding rod 3.15mm (kg)",
+        "quantity": 200,
+        "unit_price": "45.00",
+        "tax_rate": "0.18",
+        "amount": "9000.00",
+        "tax_amount": "1620.00"
+      }
+    ],
+    "subtotal": "9000.00",
+    "tax_total": "1620.00",
+    "total": "10620.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "PO_QTY_OVERRUN",
+      "story": "Split-PO overrun: third invoice pushes cumulative 1,050 kg past the 1,000 kg PO."
+    }
+  },
+  {
+    "id": "INV-14",
+    "received_at": "2026-10-08T16:30:00+05:30",
+    "source": "email",
+    "vendor_name": "Acme Industrial Supplies Pvt Ltd",
+    "vendor_tax_id": "29AABCA1234F1Z5",
+    "invoice_number": "ACM-2340",
+    "invoice_date": "2026-10-08",
+    "currency": "INR",
+    "po_number": "PO-1009",
+    "bank_account": "91827364550011",
+    "notes": "URGENT: we have changed our bank. Please remit to our new account immediately.",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "STL-ROD-12",
+        "description": "Steel rod 12mm",
+        "quantity": 100,
+        "unit_price": "120.00",
+        "tax_rate": "0.18",
+        "amount": "12000.00",
+        "tax_amount": "2160.00"
+      }
+    ],
+    "subtotal": "12000.00",
+    "tax_total": "2160.00",
+    "total": "14160.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "BANK_DETAILS_CHANGED",
+      "story": "BEC fraud signal: everything matches, but remit-to account changed with urgency language."
+    }
+  },
+  {
+    "id": "INV-15",
+    "received_at": "2026-10-09T09:00:00+05:30",
+    "source": "email",
+    "vendor_name": "Shadow Traders",
+    "vendor_tax_id": null,
+    "invoice_number": "ST-0042",
+    "invoice_date": "2026-10-08",
+    "currency": "INR",
+    "po_number": null,
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "MISC",
+        "description": "Consulting services",
+        "quantity": 1,
+        "unit_price": "95000.00",
+        "tax_rate": "0.18",
+        "amount": "95000.00",
+        "tax_amount": "17100.00"
+      }
+    ],
+    "subtotal": "95000.00",
+    "tax_total": "17100.00",
+    "total": "112100.00",
+    "expected": {
+      "decision": "REJECT",
+      "reason": "VENDOR_BLOCKED",
+      "story": "Blocked vendor in the vendor master."
+    }
+  },
+  {
+    "id": "INV-16",
+    "received_at": "2026-10-09T10:00:00+05:30",
+    "source": "email",
+    "vendor_name": "Brightline Logistics LLP",
+    "vendor_tax_id": null,
+    "invoice_number": "BL-5641",
+    "invoice_date": "2026-10-08",
+    "currency": "INR",
+    "po_number": "PO-1007",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "FRT-BLR-HYD",
+        "description": "Freight trip Bengaluru-Hyderabad",
+        "quantity": 1,
+        "unit_price": "21000.00",
+        "tax_rate": "0.12",
+        "amount": "21000.00",
+        "tax_amount": "2520.00"
+      }
+    ],
+    "subtotal": "21000.00",
+    "tax_total": "2520.00",
+    "total": "23520.00",
+    "expected": {
+      "decision": "REJECT",
+      "reason": "PO_CLOSED",
+      "story": "Invoice against a closed PO."
+    }
+  },
+  {
+    "id": "INV-17",
+    "received_at": "2026-10-09T11:00:00+05:30",
+    "source": "email",
+    "vendor_name": "Pacific Packaging Co",
+    "vendor_tax_id": null,
+    "invoice_number": "PP-7802",
+    "invoice_date": "2026-10-08",
+    "currency": "USD",
+    "po_number": "PO-1010",
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TAPE-48",
+        "description": "Packing tape 48mm",
+        "quantity": 600,
+        "unit_price": "1.20",
+        "tax_rate": "0",
+        "amount": "720.00",
+        "tax_amount": "0.00"
+      }
+    ],
+    "subtotal": "720.00",
+    "tax_total": "0.00",
+    "total": "792.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "ARITHMETIC_MISMATCH",
+      "story": "Totals don't add up: 600 x 1.20 = 720 but total says 792."
+    }
+  }
+]

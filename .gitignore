@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+*.db-*
+.venv/
+node_modules/
+.next/
+.env
+.env.*
+!.env.example
+eval_report.json

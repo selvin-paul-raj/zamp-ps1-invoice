@@ -1,0 +1,2 @@
+invoice_number,vendor_name,vendor_tax_id,invoice_date,currency,po_number,bank_account,notes,line_no,sku,description,quantity,unit_price,tax_rate,subtotal,tax_total,total
+KOS-0160,Kaveri Office Solutions Pvt Ltd,33AAKCK7788M1Z4,2026-10-10,INR,PO-1006,60221100998877,,1,CHR-ERG,Ergonomic chair,5,9500.00,18,47500.00,8550.00,56050.00
