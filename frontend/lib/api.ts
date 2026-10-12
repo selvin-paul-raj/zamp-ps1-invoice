@@ -12,6 +12,14 @@ export type Scenario = { straight_through_rate: number; hours_before: number; ho
 export type Sample = { name: string; description: string; kind: string };
 
 export type Finding = { code: string; severity: "info" | "hold" | "reject"; message: string; step: string; certainty: number; evidence: Record<string, unknown> };
+export type EvidenceRec = {
+  rule_id: string; source_system: string; source_name: string; record_id: string | null; field: string; expected: unknown; actual: unknown;
+  result: "match" | "mismatch" | "missing" | "info"; step: string; source_as_of: string | null; doc_ref: string | null; note: string; finding_code: string | null; read_at: string;
+};
+export type ModelCall = {
+  role: string; provider: string; mode: string; model: string | null; question_type: string; question: string; options: unknown; answer: unknown;
+  probability: number | null; confidence: number | null; threshold: number | null; outcome: string; latency_ms: number; input_tokens: number; cost_usd: number; error?: string | null;
+};
 export type RunEvent = { seq: number; step: string; status: string; title: string; message: string; data: any; attempt: number; ts: string };
 export type Run = {
   id: string; invoice_id: string; status: string; attempt: number; decision: string | null; final_decision: string | null;
@@ -20,6 +28,8 @@ export type Run = {
   invoice: { invoice_number: string; vendor_name: string; po_number: string | null; currency: string; total: string | null; source: string; received_at: string;
     expected?: { decision: string; reason: string | null; story?: string; seed_id?: string } | null; payload?: any };
   handoff?: Handoff;
+  evidence?: EvidenceRec[]; model_calls?: ModelCall[];
+  evidence_summary?: { records: number; sources: string[]; mismatches: number; model_calls: number; model_cost_usd: number };
   events?: RunEvent[]; reviews?: { action: string; final_decision: string; reviewer: string; note: string; created_at: string }[];
 };
 export type Stats = {
@@ -28,7 +38,9 @@ export type Stats = {
 };
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, { cache: "no-store", ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
+  // Optional API key (only when the server runs AUTH_MODE=apikey): localStorage.setItem("apiKey", "...")
+  const key = typeof window !== "undefined" ? window.localStorage.getItem("apiKey") : null;
+  const res = await fetch(`${API}${path}`, { cache: "no-store", ...init, headers: { "Content-Type": "application/json", ...(key ? { "X-API-Key": key } : {}), ...(init?.headers || {}) } });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res.json();
 }

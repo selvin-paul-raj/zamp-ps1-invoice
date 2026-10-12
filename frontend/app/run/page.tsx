@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DecisionBadge } from "@/components/decision-badge";
+import { EvidencePanel, ModelCallsCard } from "@/components/evidence-panel";
 import { cn } from "@/lib/utils";
 
 const PIPELINE = ["intake", "arithmetic", "vendor_match", "po_lookup", "currency", "three_way", "tax", "duplicates", "policy", "decide", "explain"];
@@ -15,7 +16,7 @@ const CN_PIPELINE = ["intake", "arithmetic", "vendor_match", "credit_note", "cur
 const LABELS: Record<string, string> = {
   intake: "Intake & extraction", arithmetic: "Arithmetic validation", vendor_match: "Vendor master match (+ GSTIN check)", po_lookup: "PO lookup",
   credit_note: "Credit-note match", currency: "Currency check", three_way: "3-way match (invoice / PO / GRN)", tax: "Tax & GST validation",
-  duplicates: "Duplicate & fraud checks", policy: "Approval policy", decide: "Decision (rules engine)", explain: "Explanation",
+  duplicates: "Duplicate & fraud checks (+ optional Jev)", policy: "Approval policy", decide: "Decision (rules engine, cites evidence)", explain: "Explanation",
 };
 
 function HandoffCard({ h }: { h: Handoff }) {
@@ -174,6 +175,7 @@ function RunPage() {
             </ol>
           </CardContent>
         </Card>
+        {!running && run?.evidence && <EvidencePanel evidence={run.evidence} />}
       </div>
 
       <div className="space-y-4">
@@ -199,6 +201,7 @@ function RunPage() {
           </CardContent>
         </Card>
         {!running && run?.review_status === "pending" && <HandoffCard h={run.handoff ?? null} />}
+        {!running && run?.model_calls && <ModelCallsCard calls={run.model_calls} />}
         {!running && (run?.invoice?.payload?.extraction ? <ExtractionCard ex={run.invoice.payload.extraction} /> : run && (
           <Card><CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />Document extraction</CardTitle>
             <CardDescription>Structured input via {run.invoice.source} (fields arrived as data, so nothing had to be read from a document).</CardDescription></CardHeader></Card>
