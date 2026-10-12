@@ -51,11 +51,47 @@ def invoice_number_core(num: str) -> str:
     return max(runs, key=len).lstrip("0")
 
 
+GSTIN_RE = re.compile(r"^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")
+_GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def looks_like_gstin(tax_id: Optional[str]) -> bool:
+    """Indian GST registration number shape: 2-digit state + PAN (10) + entity no. + 'Z' + check char."""
+    return bool(tax_id) and bool(GSTIN_RE.match(re.sub(r"\s", "", tax_id.upper())))
+
+
+def gstin_check_char(first14: str) -> str:
+    """GSTIN check character (mod-36 Luhn-style checksum over the first 14 characters)."""
+    total = 0
+    for i, ch in enumerate(first14.upper()):
+        prod = _GST_CHARS.index(ch) * (2 if i % 2 else 1)
+        total += prod // 36 + prod % 36
+    return _GST_CHARS[(36 - total % 36) % 36]
+
+
+def gstin_valid(tax_id: Optional[str]) -> bool:
+    if not looks_like_gstin(tax_id):
+        return False
+    t = re.sub(r"\s", "", tax_id.upper())
+    return gstin_check_char(t[:14]) == t[14]
+
+
 def mask_account(acct: Optional[str]) -> str:
     if not acct:
         return "-"
     a = re.sub(r"\s", "", acct)
     return "•" * max(0, len(a) - 4) + a[-4:]
+
+
+def _norm_gst_type(x: Any) -> Optional[str]:
+    if not x:
+        return None
+    t = re.sub(r"[^A-Z]", "", str(x).upper())
+    if t == "IGST":
+        return "IGST"
+    if t in ("CGSTSGST", "SGSTCGST", "CGSTUTGST", "CGST", "SGST"):
+        return "CGST_SGST"
+    return None
 
 
 @dataclass
@@ -88,6 +124,10 @@ class Invoice:
     received_at: Optional[str] = None
     extraction_confidence: float = 1.0
     simulate_transient_failure: bool = False
+    doc_type: str = "invoice"  # invoice | credit_note
+    reference_invoice: Optional[str] = None  # for credit notes: the invoice being credited
+    gst_type: Optional[str] = None  # IGST (inter-state) | CGST_SGST (intra-state) | None (not stated / non-GST)
+    extraction: dict[str, Any] = field(default_factory=dict)  # per-field confidence etc. from document parsing
 
     @staticmethod
     def from_payload(p: dict[str, Any]) -> "Invoice":
@@ -127,6 +167,10 @@ class Invoice:
             received_at=p.get("received_at"),
             extraction_confidence=float(p.get("extraction_confidence", 1.0)),
             simulate_transient_failure=bool(p.get("_simulate_transient_failure", False)),
+            doc_type=(str(p.get("doc_type") or "invoice").lower().replace(" ", "_").replace("-", "_")),
+            reference_invoice=(str(p["reference_invoice"]).strip() or None) if p.get("reference_invoice") else None,
+            gst_type=_norm_gst_type(p.get("gst_type")),
+            extraction=p.get("extraction") or {},
         )
 
     def fingerprint(self) -> str:

@@ -1,3 +1,4 @@
+import json
 """Idempotency, retries / fail-closed, review queue, ingest formats, API + SSE."""
 import copy
 
@@ -96,10 +97,12 @@ def test_api_end_to_end_with_sse(tmp_path, monkeypatch):
     with TestClient(main.app) as client:
         assert client.get("/health").json()["ok"]
         seeded = client.post("/demo/seed").json()
-        assert seeded["queued"] == 17
+        n_seed = len(json.loads((main.SEED_DIR / "invoices.json").read_text()))
+        n_hold = sum(1 for i in json.loads((main.SEED_DIR / "invoices.json").read_text()) if i["expected"]["decision"] == "HOLD_FOR_REVIEW")
+        assert seeded["queued"] == n_seed
         main.svc.drain(delay_ms=0)
         runs = client.get("/runs").json()
-        assert len(runs) == 17 and all(r["status"] == "completed" for r in runs)
+        assert len(runs) == n_seed and all(r["status"] == "completed" for r in runs)
         rid = runs[0]["id"]
         with client.stream("GET", f"/runs/{rid}/stream") as resp:
             body = "".join(resp.iter_text())
@@ -107,6 +110,6 @@ def test_api_end_to_end_with_sse(tmp_path, monkeypatch):
         stats = client.get("/stats").json()
         assert stats["accuracy_vs_labels"] == 1.0 and stats["false_approvals"] == 0
         q = client.get("/review-queue").json()
-        assert len(q) == 10
+        assert len(q) == n_hold
         r = client.post(f"/runs/{q[0]['id']}/review", json={"action": "reject", "reviewer": "t", "note": "x"})
         assert r.status_code == 200 and r.json()["effective_decision"] == "REJECT"

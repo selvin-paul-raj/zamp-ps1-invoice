@@ -13,12 +13,14 @@ HERE = Path(__file__).parent
 
 VENDORS = [
     {"id": "V001", "name": "Acme Industrial Supplies Pvt Ltd", "tax_id": "29AABCA1234F1Z5", "currency": "INR", "bank_account": "50100012345678", "status": "active", "aliases": ["ACME IND"]},
-    {"id": "V002", "name": "Brightline Logistics LLP", "tax_id": "33AAGFB5521K1Z2", "currency": "INR", "bank_account": "39871200004411", "status": "active", "aliases": []},
+    {"id": "V002", "name": "Brightline Logistics LLP", "tax_id": "33AAGFB5521K1ZN", "currency": "INR", "bank_account": "39871200004411", "status": "active", "aliases": []},
     {"id": "V003", "name": "Nordic Sensors AB", "tax_id": "SE556677889901", "currency": "EUR", "bank_account": "SE4550000000058398257466", "status": "active", "aliases": []},
     {"id": "V004", "name": "Pacific Packaging Co", "tax_id": "US-94-1234567", "currency": "USD", "bank_account": "021000021-778812", "status": "active", "aliases": []},
-    {"id": "V005", "name": "Shadow Traders", "tax_id": "27AAQCS0001R1Z9", "currency": "INR", "bank_account": "11223344556677", "status": "blocked", "aliases": []},
-    {"id": "V006", "name": "Kaveri Office Solutions Pvt Ltd", "tax_id": "33AAKCK7788M1Z4", "currency": "INR", "bank_account": "60221100998877", "status": "active", "aliases": []},
+    {"id": "V005", "name": "Shadow Traders", "tax_id": "27AAQCS0001R1Z0", "currency": "INR", "bank_account": "11223344556677", "status": "blocked", "aliases": []},
+    {"id": "V006", "name": "Kaveri Office Solutions Pvt Ltd", "tax_id": "33AAKCK7788M1ZN", "currency": "INR", "bank_account": "60221100998877", "status": "active", "aliases": []},
+    {"id": "V007", "name": "Deccan Electricals Pvt Ltd", "tax_id": "29AADCD4455E1ZP", "currency": "INR", "bank_account": "77450011223344", "status": "active", "aliases": []},
 ]
+# GSTINs above carry valid check characters (see app.domain.gstin_check_char). Buyer: 33AABCZ4321P1Z4 (Tamil Nadu).
 
 
 def L(no, sku, desc, qty, price, tax):
@@ -46,6 +48,15 @@ POS = [
      "lines": [L(1, "STL-ROD-12", "Steel rod 12mm", 100, "120.00", "0.18")]},
     {"po_number": "PO-1010", "vendor_id": "V004", "currency": "USD", "status": "open", "po_date": "2026-09-25",
      "lines": [L(1, "TAPE-48", "Packing tape 48mm", 600, "1.20", "0")]},
+    # Used by the PDF samples (seed/pdfs) and the India-specific cases.
+    {"po_number": "PO-1011", "vendor_id": "V006", "currency": "INR", "status": "open", "po_date": "2026-09-28",
+     "lines": [L(1, "PPR-A4-500", "A4 copier paper, ream of 500", 200, "260.00", "0.18"), L(2, "PEN-BLU-50", "Ball pens, box of 50", 50, "180.00", "0.18")]},
+    {"po_number": "PO-1012", "vendor_id": "V002", "currency": "INR", "status": "open", "po_date": "2026-09-26",
+     "lines": [L(1, "FRT-CHN-CBE", "Freight trip Chennai-Coimbatore", 10, "15000.00", "0.12")]},
+    {"po_number": "PO-1013", "vendor_id": "V007", "currency": "INR", "status": "open", "po_date": "2026-09-15",
+     "lines": [L(1, "TRF-500KVA", "500 kVA distribution transformer", 1, "640000.00", "0.18"), L(2, "HT-CBL-240", "HT cable 240 sq mm (metre)", 800, "720.00", "0.18")]},
+    {"po_number": "PO-1014", "vendor_id": "V006", "currency": "INR", "status": "open", "po_date": "2026-09-29",
+     "lines": [L(1, "TNR-HP88", "Toner cartridge HP 88A", 30, "2900.00", "0.18")]},
 ]
 
 GRNS = [
@@ -58,6 +69,10 @@ GRNS = [
     {"grn_id": "GRN-5008", "po_number": "PO-1008", "received_date": "2026-10-03", "lines": [{"line_no": 1, "quantity": 40}]},
     {"grn_id": "GRN-5009", "po_number": "PO-1009", "received_date": "2026-10-04", "lines": [{"line_no": 1, "quantity": 100}]},
     {"grn_id": "GRN-5010", "po_number": "PO-1010", "received_date": "2026-10-05", "lines": [{"line_no": 1, "quantity": 600}]},
+    {"grn_id": "GRN-5011", "po_number": "PO-1011", "received_date": "2026-10-06", "lines": [{"line_no": 1, "quantity": 200}, {"line_no": 2, "quantity": 50}]},
+    {"grn_id": "GRN-5012", "po_number": "PO-1012", "received_date": "2026-10-07", "lines": [{"line_no": 1, "quantity": 10}]},
+    {"grn_id": "GRN-5013", "po_number": "PO-1013", "received_date": "2026-10-05", "lines": [{"line_no": 1, "quantity": 1}, {"line_no": 2, "quantity": 800}]},
+    {"grn_id": "GRN-5014", "po_number": "PO-1014", "received_date": "2026-10-07", "lines": [{"line_no": 1, "quantity": 30}]},
 ]
 
 
@@ -85,7 +100,7 @@ for ref, vid, num, po, date, lines in [
     HISTORY.append({"ref": ref, "vendor_id": vid, "invoice_number": num, "po_number": po, "invoice_date": date, "currency": "INR", "total": tot, "status": "paid", "lines": pl})
 
 
-def inv(id_, received, vendor, number, date, currency, po, lines, expected, reason, *, tax_id=None, bank=None, notes="", source="email", override_totals=None, story=""):
+def inv(id_, received, vendor, number, date, currency, po, lines, expected, reason, *, tax_id=None, bank=None, notes="", source="email", override_totals=None, story="", **extra):
     pl, sub, tax, tot = priced(lines)
     if override_totals:
         sub, tax, tot = override_totals.get("subtotal", sub), override_totals.get("tax_total", tax), override_totals.get("total", tot)
@@ -93,7 +108,7 @@ def inv(id_, received, vendor, number, date, currency, po, lines, expected, reas
         "id": id_, "received_at": received, "source": source, "vendor_name": vendor, "vendor_tax_id": tax_id,
         "invoice_number": number, "invoice_date": date, "currency": currency, "po_number": po,
         "bank_account": bank, "notes": notes, "lines": pl, "subtotal": sub, "tax_total": tax, "total": tot,
-        "expected": {"decision": expected, "reason": reason, "story": story},
+        "expected": {"decision": expected, "reason": reason, "story": story}, **extra,
     }
 
 
@@ -153,6 +168,27 @@ INVOICES = [
     inv("INV-17", "2026-10-09T11:00:00+05:30", "Pacific Packaging Co", "PP-7802", "2026-10-08", "USD", "PO-1010",
         [L(1, "TAPE-48", "Packing tape 48mm", 600, "1.20", "0")],
         H, "ARITHMETIC_MISMATCH", override_totals={"total": "792.00"}, story="Totals don't add up: 600 x 1.20 = 720 but total says 792."),
+    # ---- India / AP-policy edge cases (rules-v2)
+    inv("INV-18", "Fri 2026-10-09 2:00 PM IST (UTC+05:30)", "Brightline Logistics LLP", "BL-5650", "2026-10-09", "INR", "PO-1012",
+        [L(1, "FRT-CHN-CBE", "Freight trip Chennai-Coimbatore", 10, "15000.00", "0.12")],
+        H, "GST_TYPE_MISMATCH", tax_id="33AAGFB5521K1ZN", bank="39871200004411", gst_type="IGST",
+        story="GST head wrong: supplier and buyer are both in Tamil Nadu (state 33), so CGST+SGST applies, but the invoice charges IGST."),
+    inv("INV-19", "Fri 2026-10-09 3:00 PM IST (UTC+05:30)", "Kaveri Office Solutions Pvt Ltd", "KOS-0158", "2026-10-09", "INR", "PO-1011",
+        [L(2, "PEN-BLU-50", "Ball pens, box of 50", 20, "180.00", "0.18")],
+        H, "INVALID_GSTIN", tax_id="33AAKCK7788M1ZM", bank="60221100998877", gst_type="CGST_SGST",
+        story="GSTIN typo: last character wrong, so the GST checksum fails. Input tax credit at risk until the registration is verified."),
+    inv("INV-20", "Fri 2026-10-09 4:00 PM IST (UTC+05:30)", "Deccan Electricals Pvt Ltd", "DE/26-27/0412", "2026-10-08", "INR", "PO-1013",
+        [L(1, "TRF-500KVA", "500 kVA distribution transformer", 1, "640000.00", "0.18")],
+        H, "APPROVAL_LIMIT", tax_id="29AADCD4455E1ZP", bank="77450011223344", gst_type="IGST",
+        story="Approval matrix: every check passes (inter-state IGST correct), but INR 7.55 lakh is above the INR 5 lakh auto-approval limit, so a Finance Controller signs off."),
+    inv("INV-21", "Sat 2026-10-10 10:00 AM IST (UTC+05:30)", "Acme Industrial Supplies Pvt Ltd", "ACM-CN-018", "2026-10-09", "INR", "PO-1005",
+        [L(1, "WLD-ROD-3", "Welding rod 3.15mm (kg) - returned, damaged", 20, "45.00", "0.18")],
+        H, "CREDIT_NOTE_TO_APPLY", tax_id="29AABCA1234F1Z5", doc_type="credit_note", reference_invoice="ACM-2201",
+        story="Credit note for 20 kg returned against paid invoice ACM-2201: matched and queued to be applied, never paid out."),
+    inv("INV-22", "Sat 2026-10-10 11:00 AM IST (UTC+05:30)", "Kaveri Office Solutions Pvt Ltd", "KOS-PF-031", "2026-10-09", "INR", "PO-1014",
+        [L(1, "TNR-HP88", "Toner cartridge HP 88A", 30, "2900.00", "0.18")],
+        H, "UNSUPPORTED_DOC_TYPE", tax_id="33AAKCK7788M1ZN", doc_type="proforma",
+        story="A proforma (advance quote) sent to the AP inbox: everything matches, but it is not a tax invoice, so nothing is paid on it."),
 ]
 
 

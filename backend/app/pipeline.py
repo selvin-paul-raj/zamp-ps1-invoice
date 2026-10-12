@@ -21,7 +21,7 @@ from decimal import Decimal
 from typing import Callable, Optional
 
 from .config import Settings, Tolerances
-from .decision import LLMAdapter, NullLLMAdapter, RulesDecisionEngine, template_explanation
+from .decision import LLMAdapter, NullLLMAdapter, RulesDecisionEngine, handoff_for, template_explanation
 from .domain import (
     Decision,
     Finding,
@@ -30,7 +30,9 @@ from .domain import (
     PurchaseOrder,
     StepResult,
     Vendor,
+    gstin_valid,
     invoice_number_core,
+    looks_like_gstin,
     mask_account,
     money,
     normalize_invoice_number,
@@ -44,7 +46,9 @@ class TransientStepError(RuntimeError):
 
 
 class Ctx:
-    def __init__(self, inv: Invoice, md: MasterData, tol: Tolerances):
+    def __init__(self, inv: Invoice, md: MasterData, tol: Tolerances, settings: Optional[Settings] = None):
+        self.settings = settings or Settings()
+        self.buyer_gstin = self.settings.buyer_gstin
         self.inv = inv
         self.md = md
         self.tol = tol
@@ -73,6 +77,19 @@ def _priors_for_vendor(ctx: Ctx):
     return [p for p in ctx.md.priors if vid and p.vendor_id == vid]
 
 
+def _extraction_message(inv: Invoice) -> str:
+    ex = inv.extraction or {}
+    method = ex.get("method")
+    if method == "ocr":
+        return (f"Read by OCR from a scanned PDF (mean OCR confidence {ex.get('ocr_mean_confidence') or 0:.0f}%, extraction confidence "
+                f"{inv.extraction_confidence:.2f}). Policy: OCR reads are confirmed by a person before payment in v1.")
+    if method == "llm":
+        return f"Fields were read by the LLM fallback (unknown layout, confidence {inv.extraction_confidence:.2f}); a person confirms them before payment."
+    failed = [k for k, v in (ex.get("checks") or {}).items() if not v]
+    return (f"Fields were extracted with confidence {inv.extraction_confidence:.2f}"
+            + (f"; cross-checks failed: {', '.join(failed)}" if failed else "") + ". A person should confirm them.")
+
+
 # ---------------------------------------------------------------- steps
 def step_intake(ctx: Ctx) -> StepResult:
     inv = ctx.inv
@@ -98,14 +115,19 @@ def step_intake(ctx: Ctx) -> StepResult:
             Finding(
                 "LOW_EXTRACTION_CONFIDENCE",
                 "hold",
-                f"Fields were extracted with confidence {inv.extraction_confidence:.2f} (parsed document); a human should confirm them.",
+                _extraction_message(inv),
                 "intake",
                 0.9,
                 {"extraction_confidence": inv.extraction_confidence},
             )
         )
         conf = inv.extraction_confidence
-    status = "fail" if f else "pass"
+    if inv.doc_type == "credit_note":
+        f.append(Finding("CREDIT_NOTE", "info", "Document is a credit note (money owed back to us), not a bill to pay. It follows the credit-note path.", "intake", 0.95))
+    elif inv.doc_type not in ("invoice", "tax_invoice"):
+        f.append(Finding("UNSUPPORTED_DOC_TYPE", "hold", f"Document type '{inv.doc_type}' is not an invoice (e.g. a quote or proforma); nothing should be paid on it.", "intake", 0.95))
+    blocking = [x for x in f if x.severity != "info"]
+    status = "fail" if blocking else "pass"
     return StepResult(
         "intake",
         "Intake & required fields",
@@ -113,7 +135,8 @@ def step_intake(ctx: Ctx) -> StepResult:
         f"{len(inv.lines)} line(s), {inv.currency} {money(inv.total) if inv.total is not None else '?'} from {inv.source}"
         + (f"; missing {', '.join(missing)}" if missing else ""),
         f,
-        {"invoice_number": inv.invoice_number, "vendor_name": inv.vendor_name, "source": inv.source},
+        {"invoice_number": inv.invoice_number, "vendor_name": inv.vendor_name, "source": inv.source, "doc_type": inv.doc_type,
+         "extraction": inv.extraction or None},
         conf,
     )
 
@@ -167,6 +190,8 @@ def step_vendor(ctx: Ctx) -> StepResult:
             f.append(Finding("VENDOR_AMBIGUOUS", "hold", f"'{inv.vendor_name}' only loosely matches vendor master '{best[1].name}' (similarity {best[0]:.2f}).", "vendor_match", 0.8, {"candidate": best[1].id, "score": round(best[0], 3)}))
         else:
             f.append(Finding("VENDOR_UNKNOWN", "reject", f"'{inv.vendor_name}' is not in the vendor master.", "vendor_match", 0.95, {"best_score": round(best[0], 3) if best else 0}))
+    if inv.vendor_tax_id and looks_like_gstin(inv.vendor_tax_id) and not gstin_valid(inv.vendor_tax_id):
+        f.append(Finding("INVALID_GSTIN", "hold", f"GSTIN {inv.vendor_tax_id} fails the GST checksum (typo or fake registration). Input tax credit would be at risk.", "vendor_match", 0.97, {"gstin": inv.vendor_tax_id}))
     ctx.vendor = vendor
     conf = 1.0 if method == "tax_id" else (0.9 + 0.1 * score if vendor else 1.0)
     if vendor:
@@ -330,9 +355,20 @@ def step_tax(ctx: Ctx) -> StepResult:
                 f.append(Finding("TAX_RATE_MISMATCH", "hold", f"{pl.sku}: invoice charges {float(ln.tax_rate):.0%} tax but PO specifies {float(pl.tax_rate):.0%}.", "tax", 0.96, {"invoice_rate": float(ln.tax_rate), "po_rate": float(pl.tax_rate)}))
         if ln.tax_amount is not None and abs(ln.tax_amount - base * ln.tax_rate) > tol.tax_abs:
             f.append(Finding("TAX_AMOUNT_MISMATCH", "hold", f"Line {idx + 1}: tax {money(ln.tax_amount)} != {float(ln.tax_rate):.0%} of {money(base)}.", "tax", 0.95))
+    gst_note = ""
+    seller_gstin = (ctx.vendor.tax_id if ctx.vendor and looks_like_gstin(ctx.vendor.tax_id) else None) or (inv.vendor_tax_id if looks_like_gstin(inv.vendor_tax_id) else None)
+    if inv.gst_type and seller_gstin and looks_like_gstin(ctx.buyer_gstin):
+        intra = seller_gstin[:2] == ctx.buyer_gstin[:2]
+        want = "CGST_SGST" if intra else "IGST"
+        gst_note = f"; GST type {inv.gst_type} ({'intra' if intra else 'inter'}-state supply, state {seller_gstin[:2]} -> {ctx.buyer_gstin[:2]})"
+        if inv.gst_type != want:
+            f.append(Finding("GST_TYPE_MISMATCH", "hold",
+                             f"Invoice charges {inv.gst_type.replace('_', '+')} but supplier (state {seller_gstin[:2]}) and buyer (state {ctx.buyer_gstin[:2]}) are "
+                             f"{'in the same state, so CGST+SGST applies' if intra else 'in different states, so IGST applies'}. Wrong tax head blocks our input tax credit; ask for a corrected invoice.",
+                             "tax", 0.97, {"charged": inv.gst_type, "expected": want}))
     if inv.tax_total is not None and abs(inv.tax_total - expected_tax) > tol.tax_abs * max(1, len(inv.lines)):
         f.append(Finding("TAX_AMOUNT_MISMATCH", "hold", f"Stated tax {money(inv.tax_total)} != computed {money(expected_tax)} from line rates.", "tax", 0.95))
-    return StepResult("tax", "Tax validation", "fail" if f else "pass", f"Tax {money(expected_tax)} consistent with rates" if not f else f"{len(f)} tax issue(s)", f, {"expected_tax": money(expected_tax)})
+    return StepResult("tax", "Tax validation", "fail" if f else "pass", (f"Tax {money(expected_tax)} consistent with rates" + gst_note) if not f else f"{len(f)} tax issue(s)", f, {"expected_tax": money(expected_tax), "gst_type": inv.gst_type})
 
 
 def step_duplicates(ctx: Ctx) -> StepResult:
@@ -361,8 +397,56 @@ def step_duplicates(ctx: Ctx) -> StepResult:
     return StepResult("duplicates", "Duplicate detection", "fail" if f else "pass", f"No duplicates among {checked} known invoices" if not f else f[0].message, f, {"fingerprint": fp[:12], "normalized_number": norm})
 
 
+def step_credit_note(ctx: Ctx) -> StepResult:
+    """Credit notes reduce what we owe. Never paid out; matched to the invoice they credit and applied by a human."""
+    inv = ctx.inv
+    f: list[Finding] = []
+    ref = inv.reference_invoice
+    vid = ctx.vendor.id if ctx.vendor else None
+    match = None
+    if ref:
+        norm = normalize_invoice_number(ref)
+        match = next((p for p in ctx.md.priors if p.vendor_id == vid and normalize_invoice_number(p.invoice_number) == norm), None)
+    if match is None:
+        f.append(Finding("CREDIT_NOTE_UNMATCHED", "hold", f"Credit note references {ref or 'no invoice'}, which is not among this vendor's known invoices. Find the original before applying it.", "credit_note", 0.9, {"reference": ref}))
+    elif inv.total is not None and match.total and inv.total > match.total:
+        f.append(Finding("CREDIT_EXCEEDS_INVOICE", "hold", f"Credit {money(inv.total)} is larger than the original invoice {match.invoice_number} ({money(match.total)}).", "credit_note", 0.95, {"reference": match.ref}))
+    else:
+        f.append(Finding("CREDIT_NOTE_TO_APPLY", "hold", f"Credit note for {inv.currency} {money(inv.total or Decimal('0'))} matches {match.invoice_number} ({match.status}). Apply it against the vendor's open payables; it is never paid out.", "credit_note", 0.9, {"reference": match.ref, "reference_status": match.status, "credit_amount": money(inv.total or Decimal('0'))}))
+    return StepResult("credit_note", "Credit-note match", "warn", f[0].message, f, {"reference_invoice": ref, "matched": match.ref if match else None})
+
+
+def step_policy(ctx: Ctx) -> StepResult:
+    """Approval matrix: who must sign off, based on amount. Runs after the matching checks."""
+    inv, st = ctx.inv, ctx.settings
+    f: list[Finding] = []
+    rate = st.fx_to_inr.get(inv.currency or "INR")
+    amount_inr = (inv.total or Decimal("0")) * rate if rate is not None else None
+    approver = "AP auto-approval"
+    if amount_inr is not None and amount_inr > st.approval_limit_inr and inv.doc_type != "credit_note":
+        approver = "Finance Controller"
+        f.append(Finding("APPROVAL_LIMIT", "hold", f"Amount about INR {money(amount_inr):,.0f} is above the auto-approval limit of INR {money(st.approval_limit_inr):,.0f}; policy needs a Finance Controller sign-off.", "policy", 0.9,
+                         {"amount_inr": money(amount_inr), "limit_inr": money(st.approval_limit_inr), "approver": approver}))
+    summary = f"Approver: {approver}" + (f" (about INR {money(amount_inr):,.0f})" if amount_inr is not None else " (no FX rate for this currency)")
+    return StepResult("policy", "Approval policy", "warn" if f else "pass", summary, f, {"approver": approver, "amount_inr": money(amount_inr) if amount_inr is not None else None})
+
+
+def _skipped(step: str, title: str, why: str) -> Callable[[Ctx], StepResult]:
+    def fn(ctx: Ctx) -> StepResult:
+        return StepResult(step, title, "skip", why)
+    fn.__name__ = f"skip_{step}"
+    return fn
+
+
 STEPS: list[Callable[[Ctx], StepResult]] = [
-    step_intake, step_arithmetic, step_vendor, step_po, step_currency, step_three_way, step_tax, step_duplicates,
+    step_intake, step_arithmetic, step_vendor, step_po, step_currency, step_three_way, step_tax, step_duplicates, step_policy,
+]
+
+_CN = "Not applicable to a credit note"
+CREDIT_NOTE_STEPS: list[Callable[[Ctx], StepResult]] = [
+    step_intake, step_arithmetic, step_vendor, step_credit_note,
+    _skipped("currency", "Currency check", _CN), _skipped("three_way", "3-way match (invoice / PO / GRN)", _CN),
+    step_tax, _skipped("duplicates", "Duplicate detection", "Checked inside the credit-note match"), step_policy,
 ]
 
 
@@ -374,10 +458,10 @@ def run_pipeline(
     llm: Optional[LLMAdapter] = None,
     attempt: int = 1,
 ) -> tuple[list[StepResult], Decision]:
-    ctx = Ctx(inv, md, settings.tolerances)
+    ctx = Ctx(inv, md, settings.tolerances, settings)
     llm = llm or NullLLMAdapter()
     results: list[StepResult] = []
-    for fn in STEPS:
+    for fn in (CREDIT_NOTE_STEPS if inv.doc_type == "credit_note" else STEPS):
         if inv.simulate_transient_failure and attempt == 1 and fn is step_three_way:
             raise TransientStepError("ERP goods-receipt lookup timed out (simulated)")
         r = fn(ctx)
@@ -393,7 +477,7 @@ def run_pipeline(
     decide_step = StepResult(
         "decide", "Decision (rules engine)", {"APPROVE": "pass", "HOLD_FOR_REVIEW": "warn", "REJECT": "fail"}[decision.decision],
         f"{decision.decision} ({decision.confidence:.0%})" + (f" - {decision.primary_reason}" if decision.primary_reason else ""),
-        [], {**decision.to_dict(), "info": [x.to_dict() for x in findings if x.severity == "info"]},
+        [], {**decision.to_dict(), "handoff": handoff_for(decision, inv), "info": [x.to_dict() for x in findings if x.severity == "info"]},
     )
     results.append(decide_step)
     if on_step:

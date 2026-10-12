@@ -19,6 +19,7 @@ from .domain import SEVERITY_ORDER, Decision, Finding, Invoice
 APPROVE = "APPROVE"
 HOLD = "HOLD_FOR_REVIEW"
 REJECT = "REJECT"
+ROUTING_CODES = {"APPROVAL_LIMIT"}  # policy routing, not a defect in the invoice
 
 
 class DecisionEngine(Protocol):
@@ -36,11 +37,12 @@ class RulesDecisionEngine:
         if blocking:
             top_sev = max(SEVERITY_ORDER[f.severity] for f in blocking)
             top = [f for f in blocking if SEVERITY_ORDER[f.severity] == top_sev]
-            top.sort(key=lambda f: -f.certainty)
+            # Policy routing (who signs off) ranks below real exceptions, so a possible duplicate is never hidden behind it.
+            top.sort(key=lambda f: (f.code in ROUTING_CODES, -f.certainty))
             decision = REJECT if top_sev == SEVERITY_ORDER["reject"] else HOLD
             # Confidence in a non-approve decision = how sure we are of the strongest blocking finding.
             conf = top[0].certainty
-            reasons = sorted(blocking, key=lambda f: (-SEVERITY_ORDER[f.severity], -f.certainty))
+            reasons = sorted(blocking, key=lambda f: (-SEVERITY_ORDER[f.severity], f.code in ROUTING_CODES, -f.certainty))
             return Decision(decision, conf, reasons, top[0].code)
 
         if approve_confidence < self.approve_threshold:
@@ -91,6 +93,9 @@ def template_explanation(invoice: Invoice, decision: Decision) -> str:
         REJECT: "Rejected",
     }[decision.decision]
     who = f"{invoice.vendor_name} invoice {invoice.invoice_number}"
+    if any(r.code.startswith("CREDIT") for r in decision.reasons):
+        parts = "; ".join(f"[{r.code}] {r.message}" for r in decision.reasons[:3])
+        return f"Credit note from {invoice.vendor_name} ({invoice.invoice_number}): not paid out. {parts}"
     if decision.decision == APPROVE:
         return (
             f"{head}: {who} matched its PO and goods receipt within tolerance on price, quantity, "
@@ -98,3 +103,62 @@ def template_explanation(invoice: Invoice, decision: Decision) -> str:
         )
     parts = "; ".join(f"[{r.code}] {r.message}" for r in decision.reasons[:4])
     return f"{head}: {who}. {parts}"
+
+
+# --------------------------------------------------------------------------- human handoff
+# Every HOLD reaches a person "pre-investigated": the evidence is already on the run page, plus ONE specific
+# question, who should answer it, the next action, and (where the vendor must fix something) a draft email.
+# Deterministic templates: no model writes these, so they are reproducible and safe to show an auditor.
+_HANDOFF: dict[str, tuple[str, str, str, bool]] = {
+    # code: (question, owner, next action, vendor must act?)
+    "PRICE_VARIANCE": ("Did procurement agree the higher unit price, or should the vendor re-bill at the PO price?", "Buyer / procurement", "Confirm the price change in writing, or send the vendor the draft below asking for a corrected invoice.", True),
+    "QTY_EXCEEDS_RECEIPT": ("Have the extra goods actually arrived (GRN not yet posted), or is the vendor billing ahead of delivery?", "Warehouse / receiving", "Ask receiving to post the GRN if goods arrived; otherwise ask the vendor to bill only what was received.", True),
+    "PO_QTY_OVERRUN": ("Should the PO be amended to cover the extra quantity, or is this invoice over-billing?", "Buyer / procurement", "Amend the PO (with approval) or reject the excess quantity.", True),
+    "PO_AMOUNT_OVERRUN": ("Should the PO value be increased, or is this invoice over-billing?", "Buyer / procurement", "Amend the PO value or reject the excess.", True),
+    "DUPLICATE_INVOICE": ("Is this a resend of an invoice we already have?", "AP", "Reject and tell the vendor which earlier invoice it duplicates.", True),
+    "POSSIBLE_DUPLICATE": ("Is this a genuinely new charge, or the earlier invoice sent again under a new number?", "AP", "Compare it with the earlier invoice on the run page; reject if it is the same service period.", False),
+    "BANK_DETAILS_CHANGED": ("Did the vendor really change bank accounts (verify by phone with the contact already on file)?", "Vendor master team", "Do NOT reply to the invoice email or use any number on it. Call the known contact; update the vendor master only after verification.", False),
+    "CURRENCY_MISMATCH": ("Which currency was agreed on the PO, and at what rate?", "Buyer / procurement", "Ask the vendor to re-issue in the PO currency, or record an agreed FX rate.", True),
+    "PO_INFERRED": ("Is this invoice for the inferred PO shown on the run page?", "Requester", "Confirm the PO with the requester, then approve with a note.", False),
+    "PO_MISSING": ("Which PO does this invoice belong to?", "Requester", "Ask the requester for the PO number; ask the vendor to quote it on future invoices.", True),
+    "PO_NOT_FOUND": ("The PO number on the invoice does not exist. Is it a typo, or was no PO raised?", "Buyer / procurement", "Ask the vendor for the correct PO number.", True),
+    "TAX_RATE_MISMATCH": ("Is the tax rate on the invoice correct for these goods, or is the PO right?", "Tax team", "Ask the vendor for a corrected invoice at the PO tax rate, or fix the PO.", True),
+    "TAX_AMOUNT_MISMATCH": ("The tax amount does not match the tax rate. Which one is right?", "Tax team", "Ask the vendor for a corrected invoice.", True),
+    "GST_TYPE_MISMATCH": ("The wrong GST head was charged. Can the vendor issue a corrected tax invoice?", "Tax team", "Do not book input tax credit on this invoice; request a corrected one.", True),
+    "INVALID_GSTIN": ("The vendor's GSTIN fails the checksum. Is it a typo or an unregistered vendor?", "Vendor master team", "Verify the GSTIN on the GST portal before paying.", True),
+    "ARITHMETIC_MISMATCH": ("The totals do not add up. Which figure is right?", "AP", "Ask the vendor for a corrected invoice.", True),
+    "MISSING_FIELD": ("A required field is missing. Can it be confirmed from the document?", "AP", "Fill it from the PDF or ask the vendor.", True),
+    "LOW_EXTRACTION_CONFIDENCE": ("The fields were read from a scanned or unusual document. Are they right?", "AP", "Check the extracted fields against the PDF, then approve with a note.", False),
+    "LINE_NOT_ON_PO": ("This invoice line is not on the PO. Was it ordered?", "Requester", "Confirm with the requester or reject the line.", True),
+    "GRN_MISSING": ("No goods receipt exists yet. Have the goods or services been delivered?", "Warehouse / receiving", "Ask receiving to post the GRN.", False),
+    "VENDOR_AMBIGUOUS": ("Which vendor in the master is this?", "Vendor master team", "Pick the vendor or start onboarding.", False),
+    "APPROVAL_LIMIT": ("Everything matched. Do you approve payment of this amount?", "Finance Controller", "Review the evidence and approve or reject.", False),
+    "CREDIT_NOTE_TO_APPLY": ("Apply this credit against the vendor's open payables?", "AP", "Apply the credit to the next payment run.", False),
+    "CREDIT_NOTE_UNMATCHED": ("Which invoice does this credit note relate to?", "AP", "Ask the vendor for the original invoice reference.", True),
+    "CREDIT_EXCEEDS_INVOICE": ("The credit is bigger than the invoice. Is the amount right?", "AP", "Ask the vendor to confirm the credit amount.", True),
+    "UNSUPPORTED_DOC_TYPE": ("This is not an invoice. Wait for the final tax invoice?", "AP", "Do not pay on a quote or proforma.", True),
+    "LOW_CONFIDENCE": ("All checks passed, but on fuzzy matches. Are the vendor and PO right?", "AP", "Check the highlighted matches, then approve with a note.", False),
+    "SYSTEM_ERROR": ("Processing failed. Re-run, or review by hand?", "AP / on-call engineer", "Re-run the invoice; if it fails again, process it manually.", False),
+}
+
+
+def handoff_for(decision: Decision, invoice: Optional[Invoice] = None, vendor_name: str = "", invoice_number: str = "") -> Optional[dict]:
+    """The one question a human must answer, who answers it, and a draft vendor email when the vendor must act."""
+    if decision.decision != HOLD and decision.primary_reason not in ("DUPLICATE_INVOICE",):
+        return None
+    code = decision.primary_reason or ""
+    q, owner, action, vendor_acts = _HANDOFF.get(code, ("Review the reasons and decide.", "AP", "Approve with a note, or reject.", False))
+    vname = invoice.vendor_name if invoice else vendor_name
+    num = invoice.invoice_number if invoice else invoice_number
+    email = None
+    if vendor_acts and decision.reasons:
+        issue = decision.reasons[0].message
+        email = (
+            f"Subject: Invoice {num}: correction needed before payment\n\n"
+            f"Hello {vname} team,\n\n"
+            f"We received invoice {num}. Before we can pay it, we need one thing fixed:\n"
+            f"- {issue}\n\n"
+            f"Please send a corrected invoice (or confirm the details) by replying to this email.\n"
+            f"Thank you,\nAccounts Payable"
+        )
+    return {"code": code, "question": q, "owner": owner, "next_action": action, "vendor_email_draft": email}

@@ -16,8 +16,10 @@ from sqlalchemy.engine import Engine
 
 from . import db
 from .config import Settings
-from .decision import HOLD, get_llm_adapter
+from .decision import HOLD, get_llm_adapter, handoff_for
 from .domain import (
+    Decision,
+    Finding,
     Invoice,
     MasterData,
     POLine,
@@ -279,6 +281,9 @@ class Service:
                 "currency": inv_row.currency, "total": inv_row.total, "source": inv_row.source, "received_at": inv_row.received_at,
                 "expected": db.loads(inv_row.expected),
             }
+            if r.status == "completed" and r.decision:
+                fs = [Finding(**{k: x.get(k) for k in ("code", "severity", "message", "step", "certainty", "evidence") if k in x}) for x in d["reasons"]]
+                d["handoff"] = handoff_for(Decision(r.decision, r.confidence or 0, fs, r.primary_reason), None, inv_row.vendor_name, inv_row.invoice_number)
         return d
 
     def list_runs(self, limit: int = 200, decision: Optional[str] = None, review_status: Optional[str] = None) -> list[dict[str, Any]]:
@@ -357,4 +362,60 @@ class Service:
             "labelled": len(labelled), "accuracy_vs_labels": round(correct / len(labelled), 3) if labelled else None,
             "false_approvals": false_approve,
             "p50_ms": durs[len(durs) // 2] if durs else None,
+        }
+
+    # ------------------------------------------------------------ business impact
+    RISK_CODES = {"DUPLICATE_INVOICE", "POSSIBLE_DUPLICATE", "BANK_DETAILS_CHANGED", "VENDOR_BLOCKED", "PO_CLOSED", "INVALID_GSTIN"}
+
+    def impact(self, monthly_invoices: int = 1000, manual_minutes: float = 12, review_minutes: float = 5,
+               hourly_cost_inr: float = 600, target_stp: float = 0.7) -> dict[str, Any]:
+        """Hours, cost and risk, from the runs in this system plus explicit assumptions (all overridable)."""
+        latest: dict[str, dict] = {}
+        for r in sorted(self.list_runs(limit=10_000), key=lambda x: x["created_at"]):
+            latest[r["invoice_id"]] = r
+        done = [r for r in latest.values() if r["status"] == "completed"]
+        n = len(done)
+        dec = Counter(r["decision"] for r in done)
+        observed_stp = dec.get("APPROVE", 0) / n if n else 0.0
+        fx = self.settings.fx_to_inr
+        stopped, stopped_n, overbill = Decimal("0"), 0, Decimal("0")
+        for r in done:
+            ccy = r["invoice"]["currency"] or "INR"
+            amount = Decimal(r["invoice"]["total"] or "0") * fx.get(ccy, Decimal("0"))
+            if r["primary_reason"] in self.RISK_CODES:
+                stopped += amount
+                stopped_n += 1
+            for f in r["reasons"]:
+                if f.get("code") == "PRICE_VARIANCE":
+                    overbill += Decimal(str(f.get("evidence", {}).get("variance_amount", 0))) * fx.get(ccy, Decimal("0"))
+
+        def scenario(stp: float) -> dict[str, Any]:
+            before_h = monthly_invoices * manual_minutes / 60
+            after_h = monthly_invoices * (1 - stp) * review_minutes / 60
+            saved_h = before_h - after_h
+            return {
+                "straight_through_rate": round(stp, 3),
+                "hours_before": round(before_h, 1), "hours_after": round(after_h, 1), "hours_saved": round(saved_h, 1),
+                "fte_freed": round(saved_h / 160, 2),
+                "cost_per_invoice_before_inr": round(manual_minutes / 60 * hourly_cost_inr, 1),
+                "cost_per_invoice_after_inr": round((1 - stp) * review_minutes / 60 * hourly_cost_inr, 1),
+                "monthly_saving_inr": round(saved_h * hourly_cost_inr),
+            }
+
+        return {
+            "assumptions": {
+                "monthly_invoices": monthly_invoices, "manual_minutes_per_invoice": manual_minutes,
+                "review_minutes_per_exception": review_minutes, "loaded_hourly_cost_inr": hourly_cost_inr, "target_stp": target_stp,
+                "notes": [
+                    "Manual minutes, review minutes and hourly cost are assumptions to replace with the customer's own baseline.",
+                    "Review minutes are low because every hold arrives pre-investigated with one question.",
+                    "External benchmark: Ardent Partners 2024 reports USD 9.40 average and USD 2.78 best-in-class cost per invoice (as cited by Zamp).",
+                    "The demo set is exception-heavy on purpose, so its observed straight-through rate understates a real invoice mix.",
+                ],
+            },
+            "observed": {"invoices": n, "decisions": dict(dec), "straight_through_rate": round(observed_stp, 3),
+                         "money_stopped_inr": float(stopped.quantize(Decimal("1"))), "invoices_stopped": stopped_n,
+                         "overbilling_caught_inr": float(overbill.quantize(Decimal("1")))},
+            "scenario_observed": scenario(observed_stp),
+            "scenario_target": scenario(target_stp),
         }

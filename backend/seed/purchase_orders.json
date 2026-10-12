@@ -184,5 +184,89 @@
         "tax_rate": "0"
       }
     ]
+  },
+  {
+    "po_number": "PO-1011",
+    "vendor_id": "V006",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-09-28",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "PPR-A4-500",
+        "description": "A4 copier paper, ream of 500",
+        "quantity": 200,
+        "unit_price": "260.00",
+        "tax_rate": "0.18"
+      },
+      {
+        "line_no": 2,
+        "sku": "PEN-BLU-50",
+        "description": "Ball pens, box of 50",
+        "quantity": 50,
+        "unit_price": "180.00",
+        "tax_rate": "0.18"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1012",
+    "vendor_id": "V002",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-09-26",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "FRT-CHN-CBE",
+        "description": "Freight trip Chennai-Coimbatore",
+        "quantity": 10,
+        "unit_price": "15000.00",
+        "tax_rate": "0.12"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1013",
+    "vendor_id": "V007",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-09-15",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TRF-500KVA",
+        "description": "500 kVA distribution transformer",
+        "quantity": 1,
+        "unit_price": "640000.00",
+        "tax_rate": "0.18"
+      },
+      {
+        "line_no": 2,
+        "sku": "HT-CBL-240",
+        "description": "HT cable 240 sq mm (metre)",
+        "quantity": 800,
+        "unit_price": "720.00",
+        "tax_rate": "0.18"
+      }
+    ]
+  },
+  {
+    "po_number": "PO-1014",
+    "vendor_id": "V006",
+    "currency": "INR",
+    "status": "open",
+    "po_date": "2026-09-29",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TNR-HP88",
+        "description": "Toner cartridge HP 88A",
+        "quantity": 30,
+        "unit_price": "2900.00",
+        "tax_rate": "0.18"
+      }
+    ]
   }
 ]

@@ -1,0 +1,62 @@
+{
+  "KOS-0160_kaveri_clean.pdf": {
+    "decision": "APPROVE",
+    "reason": null,
+    "story": "Happy path from a real PDF: text extracted, matched to PO-1011 and GRN-5011, CGST+SGST correct for a Tamil Nadu supplier.",
+    "fields": {
+      "invoice_number": "KOS-0160",
+      "vendor_tax_id": "33AAKCK7788M1ZN",
+      "invoice_date": "2026-10-10",
+      "po_number": "PO-1011",
+      "total": "71980.00",
+      "gst_type": "CGST_SGST",
+      "bank_account": "60221100998877",
+      "line_count": 2
+    }
+  },
+  "KOS-0161_kaveri_scanned.pdf": {
+    "decision": "HOLD_FOR_REVIEW",
+    "reason": "LOW_EXTRACTION_CONFIDENCE",
+    "story": "Scanned paper invoice (no text layer): OCR reads every field and the match is clean, but OCR reads are never auto-approved in v1, so a person confirms the fields.",
+    "fields": {
+      "invoice_number": "KOS-0161",
+      "vendor_tax_id": "33AAKCK7788M1ZN",
+      "invoice_date": "2026-10-11",
+      "po_number": "PO-1014",
+      "total": "102660.00",
+      "gst_type": "CGST_SGST",
+      "bank_account": "60221100998877",
+      "line_count": 1
+    }
+  },
+  "BL-5651_brightline_igst.pdf": {
+    "decision": "HOLD_FOR_REVIEW",
+    "reason": "GST_TYPE_MISMATCH",
+    "story": "Different vendor layout. Supplier and buyer are both in Tamil Nadu, so CGST+SGST applies, but the PDF charges IGST.",
+    "fields": {
+      "invoice_number": "BL-5651",
+      "vendor_tax_id": "33AAGFB5521K1ZN",
+      "invoice_date": "2026-10-10",
+      "po_number": "PO-1012",
+      "total": "67200.00",
+      "gst_type": "IGST",
+      "bank_account": "39871200004411",
+      "line_count": 1
+    }
+  },
+  "DE-0413_deccan_high_value.pdf": {
+    "decision": "HOLD_FOR_REVIEW",
+    "reason": "APPROVAL_LIMIT",
+    "story": "Inter-state supply (Karnataka to Tamil Nadu) with IGST, correct. Everything matches, but INR 6.8 lakh is above the INR 5 lakh auto-approval limit.",
+    "fields": {
+      "invoice_number": "DE/26-27/0413",
+      "vendor_tax_id": "29AADCD4455E1ZP",
+      "invoice_date": "2026-10-09",
+      "po_number": "PO-1013",
+      "total": "679680.00",
+      "gst_type": "IGST",
+      "bank_account": "77450011223344",
+      "line_count": 1
+    }
+  }
+}

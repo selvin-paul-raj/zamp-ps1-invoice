@@ -58,7 +58,13 @@ class Settings:
     # Optional LLM adapter for explanations. Unset = deterministic template explanation.
     llm_provider: str = field(default_factory=lambda: _env("DECISION_LLM_PROVIDER", ""))
     cors_origins: str = field(default_factory=lambda: _env("CORS_ORIGINS", "*"))
-    ruleset_version: str = "rules-v1"
+    # Buyer (our company) GST registration. Used to decide intra-state (CGST+SGST) vs inter-state (IGST).
+    buyer_gstin: str = field(default_factory=lambda: _env("BUYER_GSTIN", "33AABCZ4321P1Z4"))  # Tamil Nadu (state 33), synthetic
+    # Approval matrix: invoices above this INR value need a Finance Controller sign-off even when every check passes.
+    approval_limit_inr: Decimal = field(default_factory=lambda: Decimal(_env("APPROVAL_LIMIT_INR", "500000")))
+    # Indicative FX to INR for the approval matrix only (never used to compare invoice vs PO amounts). Assumption.
+    fx_to_inr: dict = field(default_factory=lambda: {"INR": Decimal("1"), "USD": Decimal("84"), "EUR": Decimal("92"), "GBP": Decimal("108")})
+    ruleset_version: str = "rules-v2"
     tolerances: Tolerances = field(default_factory=Tolerances)
 
 
