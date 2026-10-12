@@ -262,23 +262,61 @@ class Service:
         return {"run_id": run_id, "decision": decision.decision, "primary_reason": decision.primary_reason, "confidence": decision.confidence}
 
     # ------------------------------------------------------------ worker queue
+    worker_id = f"w-{uuid.uuid4().hex[:6]}"
+
     def claim_job(self) -> Optional[tuple[int, str, int]]:
+        """Durable queue in the database (no extra infrastructure). Postgres: SELECT ... FOR UPDATE SKIP LOCKED, so many
+        workers can pull safely. SQLite: compare-and-set update. A claimed job holds a lease; if the worker dies, the
+        lease expires and the job is reclaimed. After WORKER_MAX_ATTEMPTS failures it goes to the dead-letter state."""
         now = time.time()
         with self.engine.begin() as c:
-            row = c.execute(select(db.jobs).where(and_(db.jobs.c.status == "queued", db.jobs.c.available_at <= now)).order_by(db.jobs.c.id).limit(1)).first()
+            self._reclaim_expired(c, now)
+            q = select(db.jobs).where(and_(db.jobs.c.status == "queued", db.jobs.c.available_at <= now)).order_by(db.jobs.c.id).limit(1)
+            if self.engine.dialect.name == "postgresql":
+                q = q.with_for_update(skip_locked=True)
+            row = c.execute(q).first()
             if not row:
                 return None
-            # Atomic claim (works on SQLite and Postgres; on Postgres prefer SELECT ... FOR UPDATE SKIP LOCKED).
-            res = c.execute(update(db.jobs).where(and_(db.jobs.c.id == row.id, db.jobs.c.status == "queued")).values(status="running", attempts=row.attempts + 1))
+            res = c.execute(update(db.jobs).where(and_(db.jobs.c.id == row.id, db.jobs.c.status == "queued")).values(
+                status="running", attempts=row.attempts + 1, lease_until=now + self.settings.job_lease_s, worker_id=self.worker_id, updated_at=db.now_iso()))
             if res.rowcount != 1:
                 return None
             return row.id, row.run_id, row.attempts + 1
+
+    def _reclaim_expired(self, c, now: float) -> int:
+        res = c.execute(update(db.jobs).where(and_(db.jobs.c.status == "running", db.jobs.c.lease_until.is_not(None), db.jobs.c.lease_until < now)).values(
+            status="queued", available_at=now, last_error="lease expired (worker stopped mid-run); reclaimed", updated_at=db.now_iso()))
+        return res.rowcount or 0
+
+    def list_jobs(self, status: Optional[str] = None, limit: int = 100) -> list[dict[str, Any]]:
+        q = select(db.jobs).order_by(desc(db.jobs.c.id)).limit(limit)
+        if status:
+            q = q.where(db.jobs.c.status == status)
+        with self.engine.connect() as c:
+            return [dict(r._mapping) for r in c.execute(q)]
+
+    def requeue_job(self, job_id: int) -> dict[str, Any]:
+        """Move a dead-lettered job back to the queue (after the cause is fixed). The run gets a fresh attempt budget."""
+        with self.engine.begin() as c:
+            row = c.execute(select(db.jobs).where(db.jobs.c.id == job_id)).first()
+            if row is None:
+                raise KeyError(job_id)
+            if row.status != "dead":
+                raise ValueError("only dead-lettered jobs can be requeued")
+            c.execute(update(db.jobs).where(db.jobs.c.id == job_id).values(status="queued", attempts=0, available_at=0.0, lease_until=None, updated_at=db.now_iso()))
+            c.execute(update(db.runs).where(db.runs.c.id == row.run_id).values(status="queued", review_status="none", decision=None, primary_reason=None))
+            self._event(c, row.run_id, "requeued", "info", "Requeued from dead-letter", "Job moved back to the queue by an operator", {}, row.attempts)
+        return {"job_id": job_id, "run_id": row.run_id, "status": "queued"}
+
+    def queue_depth(self) -> dict[str, int]:
+        with self.engine.connect() as c:
+            return {r.status: r.n for r in c.execute(select(db.jobs.c.status, func.count().label("n")).group_by(db.jobs.c.status))}
 
     def run_job(self, job_id: int, run_id: str, attempt: int, delay_ms: Optional[int] = None) -> None:
         try:
             self.process_run(run_id, attempt, delay_ms=delay_ms)
             with self.engine.begin() as c:
-                c.execute(update(db.jobs).where(db.jobs.c.id == job_id).values(status="done"))
+                c.execute(update(db.jobs).where(db.jobs.c.id == job_id).values(status="done", lease_until=None, updated_at=db.now_iso()))
         except Exception as exc:  # noqa: BLE001 - every failure is retried, then fails closed
             log.warning("run %s attempt %s failed: %s", run_id, attempt, exc)
             if attempt < self.settings.max_attempts:

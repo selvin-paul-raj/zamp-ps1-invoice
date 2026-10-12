@@ -3,7 +3,7 @@
 # (first request then takes ~30-60 s) and the SQLite file resets on redeploy; "Run demo seed" reloads everything.
 services:
   - type: web
-    name: zamp-ps1-invoice-po
+    name: zamp-ps1-invoice
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
@@ -13,3 +13,5 @@ services:
         value: "350"
       - key: APPROVE_CONFIDENCE_THRESHOLD
         value: "0.85"
+      - key: JEV_MODE          # replay = recorded real Jev answers, no key needed. For live: set TYPESAFE_API_KEY
+        value: replay          # as a secret in the Render dashboard and JEV_MODE=live.

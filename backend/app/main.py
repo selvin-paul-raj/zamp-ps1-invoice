@@ -10,25 +10,44 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import time
+
+from .auth import RateLimiter, authenticate, parse_keys
 from .config import settings
 from .db import make_engine
 from .ingest import parse_upload
 from .service import Service
+from . import telemetry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+TRACING = telemetry.setup()
+log = logging.getLogger("zamp_ps1.api")
 SEED_DIR = Path(__file__).resolve().parent.parent / "seed"
 
-engine = make_engine(settings.database_url)
+
+def _engine():
+    if settings.db_migrate == "alembic":  # production path: versioned migrations (backend/migrations), Postgres-ready
+        from .migrate import upgrade_head
+
+        upgrade_head(settings.database_url)
+    return make_engine(settings.database_url)
+
+
+engine = _engine()
 svc = Service(engine, settings)
+API_KEYS = parse_keys(settings.api_keys) if settings.auth_mode == "apikey" else []
+LIMITER = RateLimiter(settings.rate_limit_per_min)
+HEARTBEAT = {"worker": None}
 
 
 async def worker_loop(stop: asyncio.Event) -> None:
     """In-process worker. Each job runs in a thread so the event loop keeps serving SSE."""
     while not stop.is_set():
+        HEARTBEAT["worker"] = time.time()
         job = await asyncio.to_thread(svc.claim_job)
         if job is None:
             await asyncio.sleep(0.2)
@@ -46,15 +65,56 @@ async def lifespan(app: FastAPI):
         if not c.execute(select(func.count()).select_from(db.vendors)).scalar():
             svc.load_master(SEED_DIR)
     stop = asyncio.Event()
-    task = asyncio.create_task(worker_loop(stop)) if settings.worker_enabled else None
+    inline = settings.worker_enabled and settings.worker_mode == "inline"
+    task = asyncio.create_task(worker_loop(stop)) if inline else None
     yield
     stop.set()
     if task:
         await task
 
 
-app = FastAPI(title="Zamp PS-1: Invoice -> PO decision", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Zamp PS-1: Invoice -> PO decision", version="0.3.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins.split(","), allow_methods=["*"], allow_headers=["*"])
+
+
+API_PREFIXES = ("/invoices", "/runs", "/demo", "/samples", "/impact", "/stats", "/master", "/review-queue", "/jobs", "/sources")
+OPEN_PATHS = ("/health", "/ready", "/docs", "/openapi.json", "/redoc")
+
+
+def _required_role(method: str, path: str) -> str:
+    if method in ("GET", "HEAD", "OPTIONS"):
+        return "viewer"
+    if path.startswith("/jobs") or path.startswith("/master"):
+        return "admin"
+    if path.endswith("/review"):
+        return "reviewer"  # releasing money (APPROVE) is checked again in the handler: approver role
+    return "operator"
+
+
+@app.middleware("http")
+async def guard(request: Request, call_next):
+    """API key + role check, rate limit, and one structured log line per API request. UI files and health are open."""
+    path = request.scope["path"]
+    is_api = path.startswith(API_PREFIXES) and not path.startswith(OPEN_PATHS)
+    t0 = time.perf_counter()
+    if is_api:
+        presented = request.headers.get("x-api-key") or (request.headers.get("authorization", "")[7:] if request.headers.get("authorization", "").lower().startswith("bearer ") else None)
+        principal = authenticate(settings.auth_mode, API_KEYS, presented)
+        if principal is None:
+            return JSONResponse({"detail": "missing or invalid API key"}, status_code=401)
+        need = _required_role(request.method, path)
+        if not principal.has(need):
+            return JSONResponse({"detail": f"role '{principal.role}' cannot do this; needs '{need}'"}, status_code=403)
+        ok, retry = LIMITER.allow(presented or (request.client.host if request.client else "anon"))
+        if not ok:
+            return JSONResponse({"detail": "rate limit exceeded"}, status_code=429, headers={"Retry-After": str(retry)})
+        request.state.principal = principal
+    resp = await call_next(request)
+    if is_api and not path.endswith("/stream"):
+        log.info("%s %s -> %s", request.method, path, resp.status_code,
+                 extra={"path": path, "status": resp.status_code, "duration_ms": int((time.perf_counter() - t0) * 1000),
+                        "client": getattr(getattr(request.state, "principal", None), "name", None)})
+    return resp
 
 
 @app.middleware("http")
@@ -92,7 +152,38 @@ class ReviewIn(BaseModel):
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "ruleset": settings.ruleset_version, "llm_adapter": svc.llm.name, "worker": settings.worker_enabled}
+    """Liveness: the process is up. Cheap, no dependencies (used by Render's health check)."""
+    return {"ok": True, "ruleset": settings.ruleset_version, "llm_adapter": svc.llm.name, "worker": settings.worker_enabled,
+            "jev_mode": settings.jev_mode}
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    """Readiness: can this instance do real work? Database reachable, master data loaded, worker alive."""
+    from sqlalchemy import func, select, text
+
+    from . import db
+
+    checks: dict[str, Any] = {}
+    ok = True
+    try:
+        with engine.connect() as c:
+            c.execute(text("SELECT 1"))
+            checks["master_data_vendors"] = c.execute(select(func.count()).select_from(db.vendors)).scalar()
+        checks["database"] = engine.dialect.name
+    except Exception as exc:  # noqa: BLE001
+        checks["database"] = f"error: {exc.__class__.__name__}"
+        ok = False
+    if settings.worker_enabled and settings.worker_mode == "inline":
+        age = None if HEARTBEAT["worker"] is None else round(time.time() - HEARTBEAT["worker"], 1)
+        checks["worker_heartbeat_age_s"] = age
+        ok = ok and age is not None and age < 30
+    else:
+        checks["worker"] = settings.worker_mode if settings.worker_enabled else "disabled"
+    checks["queue"] = svc.queue_depth()
+    checks.update({"jev_mode": settings.jev_mode, "auth": settings.auth_mode, "rate_limit_per_min": settings.rate_limit_per_min,
+                   "tracing": TRACING, "db_migrate": settings.db_migrate, "ruleset": settings.ruleset_version})
+    return JSONResponse({"ready": ok, **checks}, status_code=200 if ok else 503)
 
 
 @app.post("/invoices")
@@ -213,10 +304,51 @@ def review_queue() -> list[dict[str, Any]]:
     return svc.list_runs(limit=500, review_status="pending")
 
 
-@app.post("/runs/{run_id}/review")
-def review(run_id: str, body: ReviewIn) -> dict[str, Any]:
+@app.get("/runs/{run_id}/evidence")
+def run_evidence(run_id: str) -> dict[str, Any]:
+    """The evidence behind a decision: one record per check (system of record, record id, field, expected vs actual,
+    rule, snapshot time, document line) plus every model call (question, answer, probability, latency, tokens, cost)."""
+    if not svc.get_run(run_id):
+        raise HTTPException(404, "run not found")
+    return svc.evidence_for(run_id)
+
+
+@app.get("/sources")
+def sources() -> dict[str, Any]:
+    """Systems of record this process reads, with their snapshot time."""
+    from .evidence import SOURCE_SYSTEMS
+
+    md = svc.master_data(exclude_invoice_id=None, before=None)
+    return {"systems": [{"id": k, "name": v, **(md.sources.get(k) or {})} for k, v in SOURCE_SYSTEMS.items()],
+            "counts": {"vendors": len(md.vendors), "purchase_orders": len(md.pos), "contracts": len(md.contracts), "gst_registry": len(md.gst_registry),
+                       "bank_changes": len(md.bank_changes), "payments": len(md.payments), "prior_invoices": len(md.priors)}}
+
+
+@app.get("/jobs")
+def jobs(status: Optional[str] = None, limit: int = 100) -> dict[str, Any]:
+    """Queue view. status=dead lists the dead-letter queue (jobs that failed every retry; their runs were held, fail-closed)."""
+    return {"depth": svc.queue_depth(), "jobs": svc.list_jobs(status, limit)}
+
+
+@app.post("/jobs/{job_id}/requeue")
+def requeue(job_id: int) -> dict[str, Any]:
     try:
-        return svc.submit_review(run_id, body.action, body.reviewer, body.note, body.final_decision)
+        return svc.requeue_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(404, "job not found") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/runs/{run_id}/review")
+def review(run_id: str, body: ReviewIn, request: Request) -> dict[str, Any]:
+    principal = getattr(request.state, "principal", None)
+    releases_money = body.action == "approve" or (body.action == "override" and body.final_decision == "APPROVE")
+    if releases_money and principal is not None and not principal.has("approver"):
+        raise HTTPException(403, "only the approver role can release an invoice for payment")
+    reviewer = principal.name if (principal is not None and settings.auth_mode == "apikey") else body.reviewer
+    try:
+        return svc.submit_review(run_id, body.action, reviewer, body.note, body.final_decision)
     except KeyError as exc:
         raise HTTPException(404, "run not found") from exc
     except ValueError as exc:
