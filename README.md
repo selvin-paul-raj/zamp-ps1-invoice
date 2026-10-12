@@ -1,8 +1,10 @@
 # Invoice → PO decision process (Zamp ASA case study, PS-1)
 
+Repo: https://github.com/selvin-paul-raj/zamp-ps1-invoice (private)
+
 **What it does, in one breath:** a vendor invoice arrives as a PDF (clean or scanned), CSV or JSON. The process reads it, matches it to the purchase order, the goods receipt and the vendor master, checks for duplicates, payment fraud and Indian GST errors, and ends with **APPROVE**, **HOLD with one clear question for a person**, or **REJECT**. You watch every step happen live, and every decision says why.
 
-**Design rule:** *AI reads, code decides, people own the exceptions.* The approve/reject decision is plain, tested code, so it is auditable and an invoice cannot talk it into paying.
+**Design rule:** *AI reads, code decides, people own the exceptions.* The approve/reject decision is plain, tested code, so it is auditable and an invoice cannot talk it into paying. Models only read, match and explain; a model can never approve; an uncertain answer goes to a person.
 
 | | |
 |---|---|
@@ -10,9 +12,11 @@
 | Dashboard | Run history, decisions, confidence, reasons, KPIs, exception reasons, business impact |
 | Review queue | Every hold arrives pre-investigated: one question, who should answer, next step, draft vendor email |
 | Real inputs | Text PDFs, **scanned PDFs (OCR)**, CSV, JSON; 4 sample PDFs in 3 vendor layouts |
-| Evidence it works | 39 tests; 26/26 labelled cases; 32/32 PDF fields; **0 false approvals in 600 adversarial variants** |
+| **Evidence panel** | Every check cites its source of truth: which system (vendor master, PO register, goods receipts, rate contracts, GST registry, bank-change log, payment history, prior invoices), which record and field, what the source says vs what the invoice says, the rule, the snapshot time, and the PDF line it was read from |
+| **Jev model (TypeSafe), switchable** | Advisory only: flags likely duplicates, suggests the PO when it is missing, double-checks OCR fields, with probabilities and calibrated gates. **Replay mode by default** (recorded real Jev answers, no key needed); live with one env var |
+| Evidence it works | 59 tests; **31/31 labelled cases** (27 invoices + 4 PDFs); 32/32 PDF fields; **0 false approvals in 600 adversarial variants**; Jev live-tested on our eval sets ([docs/EVALS.md](docs/EVALS.md)) |
 
-> All data is synthetic. No API key or paid service is needed.
+> All data is synthetic. No API key or paid service is needed to run it.
 
 ---
 
@@ -20,8 +24,8 @@
 
 **Option A: one container (recommended, same as hosted)**
 ```bash
-docker build -t zamp-ps1 .
-docker run -p 8000:8000 zamp-ps1
+docker build -t zamp-ps1-invoice .
+docker run -p 8000:8000 zamp-ps1-invoice
 # open http://localhost:8000   (API docs at /docs)
 ```
 
@@ -37,22 +41,34 @@ PIPELINE_STEP_DELAY_MS=350 uvicorn app.main:app --port 8000
 
 **Developing the UI:** run the API as above and `cd frontend && npm run dev` (UI on :3000 calls the API on :8000).
 
-**Then:** click **Run demo seed** (loads 22 labelled invoices, ~10 s), and use **Try a real input** to run the sample PDFs one click at a time, or **Upload invoice** for your own file.
+**Then:** click **Run demo seed** (loads 27 labelled invoices, ~10 s), and use **Try a real input** to run the sample PDFs one click at a time, or **Upload invoice** for your own file.
 
 **Tests and evals:**
 ```bash
-cd backend && pytest -q && python -m evals.run_evals
+cd backend && pytest -q && python -m evals.run_evals && python -m evals.model_evals
+```
+
+**Turn Jev on live** (optional; the demo uses recorded answers):
+```bash
+export TYPESAFE_API_KEY=...     # or JEV_API_KEY. From console.typesafe.ai. Never commit it.
+export JEV_MODE=live            # off | replay (default) | live.  JEV_ENABLED=1 also means live.
 ```
 
 ---
 
 ## What happens to one invoice
 
-`intake & extraction → arithmetic → vendor match (+ GSTIN checksum, blocked vendor, bank-account change) → PO lookup (stated or inferred) → currency → 3-way match (price vs PO, quantity vs goods received, PO history) → tax & GST (rate, amount, CGST+SGST vs IGST) → duplicates → approval policy → decision → explanation`
+`intake & extraction (+ injection scan) → arithmetic → vendor match (+ GSTIN checksum, GST registry status, blocked vendor, bank account vs master vs bank-change log vs payment history) → PO lookup (stated, inferred, or Jev-suggested; PO edited after the invoice?) → currency → 3-way match (price vs PO vs rate contract, quantity vs goods received, PO history) → tax & GST → duplicates (+ Jev judgement) → approval policy → decision (cites evidence) → explanation`
 
 Credit notes take their own path: matched to the original invoice and applied, never paid out.
 
 Full system design with diagrams (architecture, data model, sequence, rules engine, human-in-the-loop, retries, security, scaling, deployment, trade-offs, roadmap): **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+### Sources of truth and evidence
+Each check writes an **evidence record**: source system, record id, field, expected (what the system of record says) vs actual (what the invoice says), rule id, the source's snapshot time, and the document page/line where the value was read. The decision cites the records behind each reason. Evidence is stored with the run (audit trail), returned by `GET /runs/{id}/evidence`, and shown in the **Evidence** panel. Four **freshness/conflict** checks hold an invoice when sources disagree: PO edited after the invoice date, vendor bank account changed recently without call-back, GSTIN cancelled in the registry, PO price above the rate contract. Details: [docs/ARCHITECTURE.md §3a](docs/ARCHITECTURE.md).
+
+### The Jev model (advisory, switchable)
+[Jev](https://docs.typesafe.ai/models) answers typed questions with probabilities. Three jobs, each behind a gate tuned on our data: **duplicate judgement** (p ≥ 0.70 adds a hold), **choose the PO** when it is missing (p ≥ 0.80 and the same answer with options reversed → a suggestion; the invoice stays held), **field check** for OCR reads (p < 0.80 flags the field). A model answer can only add caution, never approve. PII (bank accounts, PAN, IFSC, e-mail, phone) is replaced by placeholders before any call. Every call is logged (question, answer, probability, latency, tokens, cost, model version). Measured against rules-only in **[docs/EVALS.md](docs/EVALS.md)**: on a challenge set, rules alone approved 3 disguised re-submissions; with Jev, 0, and no false holds added.
 
 ### How the decision is made
 - Every check produces findings with a severity (`info`, `hold`, `reject`), a certainty and evidence.
@@ -110,6 +126,11 @@ Everything else covered:
 | KOS-0161.pdf | Scanned PDF (OCR) | HOLD · LOW_EXTRACTION_CONFIDENCE |
 | BL-5651.pdf | Different layout, IGST intra-state | HOLD · GST_TYPE_MISMATCH |
 | DE-0413.pdf | Inter-state IGST (correct), ₹6.8 lakh | HOLD · APPROVAL_LIMIT |
+| INV-23 | Invoice = PO, but PO is 8% above the rate contract | HOLD · CONTRACT_PRICE_CONFLICT |
+| INV-24 | GSTIN valid, but cancelled in the GST registry | HOLD · GSTIN_NOT_ACTIVE |
+| INV-25 | Remit-to = vendor master, but master bank changed 4 days ago, unverified | HOLD · VENDOR_BANK_RECENTLY_CHANGED |
+| INV-26 | PO edited after the invoice date | HOLD · PO_CHANGED_AFTER_INVOICE |
+| INV-27 | No PO, two open POs fit (Jev suggests the right one; still held) | HOLD · PO_MISSING |
 | sample_flaky.json | ERP timeout on attempt 1 | retry → APPROVE |
 
 Assumptions behind these choices: **[docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md)**.
@@ -120,9 +141,11 @@ Assumptions behind these choices: **[docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md)**
 
 `python -m evals.run_evals` runs three checks and exits non-zero on any false approval:
 
-1. **Labelled set:** 22 seed invoices + 4 PDFs in received order on a fresh database → **26/26 decisions and primary reasons correct, 0 false approvals.** The rules were written with these labels in mind, so this is a regression gate, not a claim about unseen data.
+1. **Labelled set:** 27 seed invoices + 4 PDFs in received order on a fresh database → **31/31 decisions and primary reasons correct, 0 false approvals** (same with Jev off, replay or live). The rules were written with these labels in mind, so this is a regression gate, not a claim about unseen data.
 2. **PDF extraction:** **32/32 fields** (number, GSTIN, date, PO, total, GST type, bank account, line count) across 4 PDFs, 3 layouts, 1 scanned.
 3. **Adversarial held-out set:** 600 broken variants of invoices that should be approved (random price rises of 3–30%, over-billing beyond the PO, bank change, currency swap, tax-rate change, totals off by 1–5%, unknown PO, resend with reformatted number, GSTIN typo, injected "pre-approved" text). **0 approved.** By the rule of three, the false-approval rate for these failure types is below ~0.5% with 95% confidence.
+
+`python -m evals.model_evals` measures the Jev roles against rules-only on four labelled sets (84 duplicate pairs, 15 PO-choice cases, 72 field checks, 6 end-to-end challenge invoices): precision/recall, false-hold rate, calibration (ECE + reliability plot), latency and cost. The answers were recorded from the real Jev API (`jev-1.13.0`) on 12 Oct 2026 and replay exactly. Results and honest limits: **[docs/EVALS.md](docs/EVALS.md)**.
 
 A lesson from building it: the first version of the adversarial generator reported one "false approval". It was the test that was wrong (it had created a legitimate invoice still within the goods received). Fixed the generator, kept the story.
 
@@ -132,7 +155,7 @@ A lesson from building it: the first version of the adversarial generator report
 
 The dashboard's **Business impact** card (and `GET /impact`) turns runs into hours, cost per invoice and money stopped. Every assumption is an input: invoices per month, manual minutes per invoice, review minutes per exception, loaded hourly cost, target straight-through rate.
 
-Example with the defaults (1,000 invoices/month, 12 manual minutes, 5 review minutes per exception, ₹600/hour, 70% straight-through): **200 → 25 AP hours a month (~175 saved, about 1 FTE), cost per invoice ₹120 → ₹15.** On the demo set it stopped about **₹3.3 lakh** of duplicate, fraud, blocked-vendor and invalid-GSTIN payments, plus ₹19,000 of price over-billing. External benchmark: Ardent Partners 2024 puts average AP cost at USD 9.40 per invoice and best-in-class at USD 2.78.
+Example with the defaults (1,000 invoices/month, 12 manual minutes, 5 review minutes per exception, ₹600/hour, 70% straight-through): **200 → 25 AP hours a month (~175 saved, about 1 FTE), cost per invoice ₹120 → ₹15.** After the demo seed plus the four sample PDFs it stopped about **₹5.1 lakh** of duplicate, fraud, blocked-vendor and invalid or cancelled-GSTIN payments, plus ₹19,000 of price over-billing. External benchmark: Ardent Partners 2024 puts average AP cost at USD 9.40 per invoice and best-in-class at USD 2.78.
 
 How I'd prove this at a real customer in 30 days: **[docs/ROLLOUT_30_DAYS.md](docs/ROLLOUT_30_DAYS.md)**.
 
@@ -162,27 +185,42 @@ How I'd prove this at a real customer in 30 days: **[docs/ROLLOUT_30_DAYS.md](do
 | GET | `/samples`, `/samples/{name}` | Sample inputs; download originals |
 | POST | `/demo/sample/{name}` | Run a sample through the upload path |
 | POST | `/demo/seed` | Reset and load the labelled demo set |
+| GET | `/runs/{id}/evidence` | Evidence records + model calls behind a decision |
+| GET | `/sources` | Systems of record and their snapshot times |
+| GET | `/jobs?status=dead` · POST `/jobs/{id}/requeue` | Queue depth, dead-letter queue, requeue (admin) |
+| GET | `/health` · `/ready` | Liveness · readiness (database, worker heartbeat, queue, switches) |
 
 The same routes are also served under `/api/...` for the bundled UI.
 
 ## Layout
 ```
-backend/app/ingest.py      PDF text + OCR extraction, CSV/JSON parsing, optional LLM fallback
-backend/app/pipeline.py    the matching steps (pure functions)
+backend/app/ingest.py      PDF text + OCR extraction (with page/line of each field), CSV/JSON parsing, optional LLM fallback
+backend/app/pipeline.py    the matching steps; every check writes evidence
+backend/app/evidence.py    systems of record + the evidence record
+backend/app/jev.py         Jev (TypeSafe) adapter: live HTTP client, replay store, three gated roles
+backend/app/safety.py      PII redaction before model calls, prompt-injection scan
 backend/app/decision.py    rules engine, human handoff templates, explanations
-backend/app/service.py     ingest, idempotency, job queue, retries, fail-closed, reviews, stats, impact
-backend/app/main.py        FastAPI routes, SSE, worker, serves the bundled UI
-backend/seed/              synthetic vendors, POs, GRNs, history, 22 labelled invoices, pdfs/ (4 PDFs + labels)
-backend/tests/             39 tests
-backend/evals/             labelled evals + adversarial held-out generator
+backend/app/service.py     ingest, idempotency, durable job queue (leases, dead-letter), reviews, evidence, stats, impact
+backend/app/main.py        FastAPI routes, auth/RBAC, rate limit, SSE, health/ready, worker, serves the bundled UI
+backend/app/auth.py        API keys, roles, rate limiter      backend/app/telemetry.py  OpenTelemetry + JSON logs
+backend/app/worker.py      standalone worker (WORKER_MODE=external)
+backend/migrations/        Alembic migrations (DB_MIGRATE=alembic)
+backend/seed/              synthetic vendors, POs, GRNs, contracts, GST registry, bank-change log, payments, history,
+                           27 labelled invoices, pdfs/ (4 PDFs + labels), jev_replay.json (recorded real Jev answers)
+backend/tests/             59 tests
+backend/evals/             labelled evals, adversarial generator, model_evals (Jev vs rules-only)
 frontend/                  Next.js dashboard, live run view, review queue (static export)
-docs/                      ARCHITECTURE, ASSUMPTIONS, DEMO_RUNBOOK, ROLLOUT_30_DAYS
+docs/                      ARCHITECTURE, EVALS, ASSUMPTIONS, DEMO_RUNBOOK, ROLLOUT_30_DAYS
 LOOM_SCRIPT.md             5-minute video script
 ```
 
+## Production switches (off by default)
+`DB_MIGRATE=alembic` (versioned migrations, Postgres-ready) · `WORKER_MODE=external` + `python -m app.worker` (durable Postgres queue with `SKIP LOCKED`, leases, retries, dead-letter) · `AUTH_MODE=apikey` + `API_KEYS` (roles; only the approver releases money) · `RATE_LIMIT_PER_MIN` · `OTEL_ENABLED=1` (OpenTelemetry traces, GenAI conventions for model calls; works with Langfuse's OTel endpoint) · `LOG_FORMAT=json` · `JEV_MODE`. Full list in `.env.example`. The free Render deploy runs with the defaults.
+
 ## Not built yet (and what I'd do next)
-- Calibrate the hand-set certainties on real labelled data; tune the gate per vendor.
+- Calibrate the hand-set rule certainties on real labelled data (the Jev probabilities are already measured for calibration); tune gates per vendor and per model version.
+- Live connectors for the systems of record (ERP, GSTN via a GSP, bank statements) instead of seeded snapshots.
 - PDF viewer beside the fields with highlights in the review screen.
 - Per-vendor tolerances, freight and early-payment discounts, TDS and e-invoice (IRN) checks.
 - Posting approved invoices to an ERP and reading the record back.
-- Postgres job claiming with `SELECT … FOR UPDATE SKIP LOCKED` and separate OCR workers (the Postgres path in `docker-compose.yml` has not been load-tested).
+- Separate OCR workers. The Postgres path (`SKIP LOCKED` claiming, Alembic migrations) is written and the migrations are tested on SQLite, but it has **not been run against a real Postgres or load-tested** in this sandbox.

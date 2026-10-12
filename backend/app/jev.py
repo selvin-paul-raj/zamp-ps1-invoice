@@ -110,7 +110,9 @@ class ReplayStore:
 
 
 def request_hash(state: Any, questions: dict[str, Any]) -> str:
-    return hashlib.sha256(json.dumps({"family": "jev", "state": state, "questions": questions}, sort_keys=True, default=str).encode()).hexdigest()
+    # Key order is kept on purpose: the order of options is part of the question (the PO-choice self-consistency check
+    # asks the same question with options reversed, and those are two different requests).
+    return hashlib.sha256(json.dumps({"family": "jev", "state": state, "questions": questions}, default=str).encode()).hexdigest()
 
 
 # --------------------------------------------------------------------------- helpers

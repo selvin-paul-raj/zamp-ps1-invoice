@@ -479,7 +479,8 @@ class Service:
         }
 
     # ------------------------------------------------------------ business impact
-    RISK_CODES = {"DUPLICATE_INVOICE", "POSSIBLE_DUPLICATE", "BANK_DETAILS_CHANGED", "VENDOR_BLOCKED", "PO_CLOSED", "INVALID_GSTIN"}
+    RISK_CODES = {"DUPLICATE_INVOICE", "POSSIBLE_DUPLICATE", "BANK_DETAILS_CHANGED", "VENDOR_BLOCKED", "PO_CLOSED", "INVALID_GSTIN",
+                  "VENDOR_BANK_RECENTLY_CHANGED", "GSTIN_NOT_ACTIVE"}
 
     def impact(self, monthly_invoices: int = 1000, manual_minutes: float = 12, review_minutes: float = 5,
                hourly_cost_inr: float = 600, target_stp: float = 0.7) -> dict[str, Any]:

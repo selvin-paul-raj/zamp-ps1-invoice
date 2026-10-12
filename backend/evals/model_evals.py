@@ -191,7 +191,8 @@ def eval_po_choice(assist: ModelAssist, settings) -> list[dict]:
         raw = _raw_po(assist, ctx, pos) if call["outcome"] == "indistinguishable_to_human" else (top, call["probability"])
         rows.append({"id": cid, "correct": correct, "top": top or raw[0], "p_top": call["probability"] if call["probability"] is not None else raw[1],
                      "raw_top": raw[0], "raw_p": raw[1], "outcome": call["outcome"], "suggested": sug["po_number"] if sug else None,
-                     "n_candidates": len(pos), "probabilities": probs, "latency_ms": call["latency_ms"], "tokens": call["input_tokens"], "mode": call["mode"],
+                     "n_candidates": len(pos), "probabilities": probs, "latency_ms": call["latency_ms"], "tokens": sum(c["input_tokens"] or 0 for c in ctx.callbuf),
+                     "n_calls": sum(1 for c in ctx.callbuf if c["mode"] not in ("skipped",)), "mode": call["mode"],
                      "model": call["model"]})
     return rows
 
@@ -456,6 +457,7 @@ def main() -> int:
     e_f, rel_f = ece([(r["p"], r["label"]) for r in fields])
     e_p, rel_p = ece([(r["p_top"], 1 if r["top"] == r["correct"] else 0) for r in labelled_po], bins=5)
     calls = [r for r in dup if r["asked"]] + po + list({(r["doc"], r["variant"]): r for r in fields}.values())
+    n_calls = sum(1 for r in dup if r["asked"]) + sum(r.get("n_calls", 1) for r in po) + len({(r["doc"], r["variant"]) for r in fields})
     lat = [r["latency_ms"] for r in calls if r.get("latency_ms")]
     toks = sum(r["tokens"] or 0 for r in dup + po + fields)
     models = sorted({r.get("model") for r in dup + po + fields if r.get("model")})
@@ -485,7 +487,7 @@ def main() -> int:
                    "brier": brier([(r["p"], r["label"]) for r in fields])},
         "challenge_end_to_end": {m: {"rows": rows, "false_approvals": sum(1 for r in rows if r["label"] != "APPROVE" and r["decision"] == "APPROVE"),
                                      "false_holds": sum(1 for r in rows if r["label"] == "APPROVE" and r["decision"] != "APPROVE")} for m, rows in chall.items()},
-        "cost": {"calls": len(calls), "input_tokens": toks, "usd": round(toks * settings.jev_price_per_mtok_usd / 1e6, 6),
+        "cost": {"calls": n_calls, "input_tokens": toks, "usd": round(toks * settings.jev_price_per_mtok_usd / 1e6, 6),
                  "latency_ms_p50": int(statistics.median(lat)) if lat else None, "latency_ms_p95": int(sorted(lat)[int(0.95 * (len(lat) - 1))]) if lat else None},
         "reliability": {"duplicate (noul)": rel_d, "field support (noul)": rel_f, "PO choice (top prob.)": rel_p},
         "rows": {"duplicates": dup, "po_choice": po, "fields": fields},
