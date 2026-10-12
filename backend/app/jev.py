@@ -272,31 +272,50 @@ class ModelAssist:
                       gate, outcome, meta, f"{p.invoice_number}", "POSSIBLE_DUPLICATE" if outcome == "hold_added" else None)
 
     # ---- role 2: choose between candidate POs (choice)
+    PO_INSTR = ("Which purchase order does this invoice bill against? Use the items, descriptions, delivery location, "
+                "quantities, prices and dates.")
+
     def choose_po(self, ctx, cands: list[PurchaseOrder]) -> Optional[dict]:
+        """Two guards found by the evals (docs/EVALS.md): (1) candidates that are identical in content cannot be told apart
+        from the documents, so the model is not asked; (2) self-consistency: the question is asked twice with the options in
+        opposite order and the model must pick the same PO above the gate both times. Otherwise a person picks."""
         inv = ctx.inv
+        gate = self.s.jev_po_min_p
+        sig = lambda po: json.dumps(sorted((l.sku, l.description.lower(), str(l.quantity), str(l.unit_price)) for l in po.lines))  # noqa: E731
+        if len({sig(po) for po in cands}) < len(cands):
+            dup_meta = {"mode": "skipped", "model": None, "latency_ms": 0, "input_tokens": 0, "cost_usd": 0.0, "request_hash": "-", "error": None}
+            self._log(ctx, "choose_po", "choice", self.PO_INSTR, [po.po_number for po in cands], None, None, None, gate,
+                      "indistinguishable_to_human", dup_meta, ", ".join(po.po_number for po in cands))
+            return None
         red = Redactor()
         criteria = {}
         for po in cands[:20]:
             criteria[po.po_number] = red.obj({"po_date": str(po.po_date), "lines": [{"sku": l.sku, "description": l.description, "quantity": str(l.quantity),
                                                                                        "unit_price": str(l.unit_price)} for l in po.lines]})
         state = {"invoice": _inv_view(inv, red)}
-        q = {"type": "choice", "instructions": "Which purchase order does this invoice bill against? Use the items, descriptions, delivery location, "
-                                               "quantities, prices and dates.", "criteria": criteria}
-        resp, meta = self._call(ctx, "choose_po", state, {"po": q}, lambda: {"po": _choice_answer(_fake_choice(state, criteria))})
-        gate = self.s.jev_po_min_p
-        if not resp:
-            self._log(ctx, "choose_po", "choice", q["instructions"], list(criteria), None, None, None, gate, "error_no_action", meta, None)
-            return None
-        a = resp["answers"]["po"]
-        probs = a.get("probabilities") or {}
-        top = a.get("choice") or max(probs, key=probs.get)
-        p = float(probs.get(top, 0))
-        outcome = "suggestion" if p >= gate else "to_human"
-        self._log(ctx, "choose_po", "choice", q["instructions"], probs, top, p, a.get("confidence"), gate, outcome, meta, top,
-                  "PO_SUGGESTED_BY_MODEL" if outcome == "suggestion" else None)
+        answers = []
+        for order in (list(criteria), list(reversed(criteria))):
+            q = {"type": "choice", "instructions": self.PO_INSTR, "criteria": {k: criteria[k] for k in order}}
+            crit = q["criteria"]
+            resp, meta = self._call(ctx, "choose_po", state, {"po": q}, lambda c=crit: {"po": _choice_answer(_fake_choice(state, c))})
+            if not resp:
+                self._log(ctx, "choose_po", "choice", q["instructions"], order, None, None, None, gate, "error_no_action", meta, None)
+                return None
+            a = resp["answers"]["po"]
+            probs = a.get("probabilities") or {}
+            top = a.get("choice") or max(probs, key=probs.get)
+            answers.append((top, float(probs.get(top, 0)), a.get("confidence"), probs, meta))
+        (t1, p1, c1, pr1, m1), (t2, p2, c2, pr2, m2) = answers
+        consistent = t1 == t2
+        p = min(p1, p2) if consistent else 0.0
+        outcome = "suggestion" if consistent and p >= gate else ("inconsistent_to_human" if not consistent else "to_human")
+        for i, (t, pp, cc, pr, mm) in enumerate(answers):
+            self._log(ctx, "choose_po", "choice", self.PO_INSTR + (" [options reversed]" if i else ""), pr, t, pp, cc, gate, outcome, mm, t,
+                      "PO_SUGGESTED_BY_MODEL" if outcome == "suggestion" and i == 0 else None)
         if outcome != "suggestion":
             return None
-        return {"po_number": top, "probability": round(p, 3), "confidence": a.get("confidence"), "probabilities": probs, "model": meta["model"], "mode": meta["mode"]}
+        return {"po_number": t1, "probability": round(p, 3), "confidence": c1, "probabilities": pr1, "model": m1["model"], "mode": m1["mode"],
+                "self_consistent": True}
 
     # ---- role 3: field-level confidence for low-confidence extraction (noul fan-out)
     FIELDS = ("invoice_number", "invoice_date", "total", "vendor_tax_id", "po_number", "bank_account")

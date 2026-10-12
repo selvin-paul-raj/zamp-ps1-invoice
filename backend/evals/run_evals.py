@@ -93,8 +93,13 @@ def evaluate() -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", help="write the full report here")
-    ap.add_argument("--adv-repeats", type=int, default=20, help="random variants per (base invoice, mutation)")
+    ap.add_argument("--adv-repeats", type=int, default=20, help="random variants per (base invoice, mutation); 0 skips")
+    ap.add_argument("--jev", choices=["off", "replay", "live"], help="Jev mode for this run (default: env JEV_MODE, else replay)")
     args = ap.parse_args()
+    if args.jev:
+        os.environ["JEV_MODE"] = args.jev
+        if args.jev == "live":
+            os.environ["JEV_RECORD"] = "1"  # live answers are recorded so replay reproduces them exactly
     rep = evaluate()
     print(f"{'id':7} {'expected':16} {'got':16} {'expected_reason':22} {'primary_reason':22} conf")
     for r in rep["rows"]:
@@ -121,6 +126,10 @@ def main() -> int:
     items = {i["id"]: i for i in json.loads((SEED / "invoices.json").read_text())}
     bases = [items[i] for i in ("INV-01", "INV-02", "INV-04", "INV-19") if i in items]
     bases = [b for b in bases if b["expected"]["decision"] == "APPROVE"]
+    if args.adv_repeats <= 0:
+        if args.json:
+            Path(args.json).write_text(json.dumps(rep, indent=2))
+        return 0 if rep["false_approvals"] == 0 and rep["decision_accuracy"] == 1.0 else 1
     adv = adversarial(SEED, bases, repeats=args.adv_repeats)
     rep["adversarial"] = adv
     print()

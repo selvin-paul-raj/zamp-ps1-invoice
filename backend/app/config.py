@@ -96,7 +96,7 @@ class Settings:
     jev_record: bool = field(default_factory=lambda: _env("JEV_RECORD", "0") == "1")
     jev_price_per_mtok_usd: float = field(default_factory=lambda: float(_env("JEV_PRICE_PER_MTOK_USD", "0.042")))
     # Calibrated gates (chosen on docs/EVALS.md). Below a gate the model's answer is not acted on; a person decides.
-    jev_dup_hold_p: float = field(default_factory=lambda: float(_env("JEV_DUP_HOLD_P", "0.80")))
+    jev_dup_hold_p: float = field(default_factory=lambda: float(_env("JEV_DUP_HOLD_P", "0.70")))
     jev_po_min_p: float = field(default_factory=lambda: float(_env("JEV_PO_MIN_P", "0.80")))
     jev_field_min_p: float = field(default_factory=lambda: float(_env("JEV_FIELD_MIN_P", "0.80")))
 
