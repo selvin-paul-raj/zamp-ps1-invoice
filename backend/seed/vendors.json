@@ -63,5 +63,23 @@
     "bank_account": "77450011223344",
     "status": "active",
     "aliases": []
+  },
+  {
+    "id": "V008",
+    "name": "Coromandel Chemicals Pvt Ltd",
+    "tax_id": "33AACCC5566H1ZQ",
+    "currency": "INR",
+    "bank_account": "88990011447700",
+    "status": "active",
+    "aliases": []
+  },
+  {
+    "id": "V009",
+    "name": "Vellore Textiles",
+    "tax_id": "33AAFFV9012T1ZK",
+    "currency": "INR",
+    "bank_account": "45001122339988",
+    "status": "active",
+    "aliases": []
   }
 ]

@@ -28,6 +28,24 @@ def _database_url() -> str:
     return "sqlite:///./zamp_ps1.db"
 
 
+def jev_api_key() -> str:
+    """Read at call time, never stored on settings (so it is never logged or returned by an endpoint)."""
+    return os.environ.get("JEV_API_KEY") or os.environ.get("TYPESAFE_API_KEY") or ""
+
+
+def _jev_mode() -> str:
+    mode = os.environ.get("JEV_MODE", "").strip().lower()
+    en = os.environ.get("JEV_ENABLED", "").strip()
+    if en == "0":
+        return "off"
+    if en == "1" and not mode:
+        mode = "live"
+    mode = mode or "replay"
+    if mode == "live" and not jev_api_key():
+        return "replay"
+    return mode if mode in ("off", "replay", "live") else "replay"
+
+
 @dataclass(frozen=True)
 class Tolerances:
     """Matching tolerances. In production these would be per vendor / category."""
@@ -64,7 +82,36 @@ class Settings:
     approval_limit_inr: Decimal = field(default_factory=lambda: Decimal(_env("APPROVAL_LIMIT_INR", "500000")))
     # Indicative FX to INR for the approval matrix only (never used to compare invoice vs PO amounts). Assumption.
     fx_to_inr: dict = field(default_factory=lambda: {"INR": Decimal("1"), "USD": Decimal("84"), "EUR": Decimal("92"), "GBP": Decimal("108")})
-    ruleset_version: str = "rules-v2"
+    # A vendor-master bank change younger than this (days before the invoice) and not verified by call-back holds the invoice.
+    bank_change_cooldown_days: int = field(default_factory=lambda: int(_env("BANK_CHANGE_COOLDOWN_DAYS", "30")))
+
+    # ---- Jev (TypeSafe) model: advisory only. Never approves; can only add a hold or a suggestion for a person.
+    # JEV_MODE: off | replay | live.  replay = recorded real answers (+ deterministic fake for unseen questions), no network.
+    # JEV_ENABLED=1 is shorthand for live (falls back to replay when no key is set); JEV_ENABLED=0 turns it off.
+    jev_mode: str = field(default_factory=lambda: _jev_mode())
+    jev_base_url: str = field(default_factory=lambda: _env("JEV_BASE_URL", _env("TYPESAFE_BASE_URL", "https://api.typesafe.ai")))
+    jev_model: str = field(default_factory=lambda: _env("JEV_MODEL", _env("TYPESAFE_DEFAULT_MODEL", "jev-latest")))
+    jev_timeout_s: float = field(default_factory=lambda: float(_env("JEV_TIMEOUT_S", "10")))
+    jev_replay_file: str = field(default_factory=lambda: _env("JEV_REPLAY_FILE", ""))
+    jev_record: bool = field(default_factory=lambda: _env("JEV_RECORD", "0") == "1")
+    jev_price_per_mtok_usd: float = field(default_factory=lambda: float(_env("JEV_PRICE_PER_MTOK_USD", "0.042")))
+    # Calibrated gates (chosen on docs/EVALS.md). Below a gate the model's answer is not acted on; a person decides.
+    jev_dup_hold_p: float = field(default_factory=lambda: float(_env("JEV_DUP_HOLD_P", "0.80")))
+    jev_po_min_p: float = field(default_factory=lambda: float(_env("JEV_PO_MIN_P", "0.80")))
+    jev_field_min_p: float = field(default_factory=lambda: float(_env("JEV_FIELD_MIN_P", "0.80")))
+
+    # ---- Production switches (all default to the simple demo mode)
+    auth_mode: str = field(default_factory=lambda: _env("AUTH_MODE", "off"))  # off | apikey
+    api_keys: str = field(default_factory=lambda: _env("API_KEYS", ""))  # "key:role[:name],..."  roles: viewer < operator < reviewer < approver < admin
+    rate_limit_per_min: int = field(default_factory=lambda: int(_env("RATE_LIMIT_PER_MIN", "0")))  # 0 = off
+    worker_mode: str = field(default_factory=lambda: _env("WORKER_MODE", "inline"))  # inline (in the API process) | external (python -m app.worker)
+    job_lease_s: float = field(default_factory=lambda: float(_env("JOB_LEASE_SECONDS", "120")))
+    db_migrate: str = field(default_factory=lambda: _env("DB_MIGRATE", "create_all"))  # create_all | alembic
+    otel_enabled: bool = field(default_factory=lambda: _env("OTEL_ENABLED", "0") == "1")
+    log_format: str = field(default_factory=lambda: _env("LOG_FORMAT", "text"))  # text | json
+    redact_pii: bool = field(default_factory=lambda: _env("REDACT_PII", "1") == "1")
+
+    ruleset_version: str = "rules-v3"
     tolerances: Tolerances = field(default_factory=Tolerances)
 
 

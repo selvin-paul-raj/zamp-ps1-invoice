@@ -18,7 +18,11 @@ from . import db
 from .config import Settings
 from .decision import HOLD, get_llm_adapter, handoff_for
 from .domain import (
+    BankChange,
+    Contract,
     Decision,
+    GstRecord,
+    Payment,
     Finding,
     Invoice,
     MasterData,
@@ -46,23 +50,38 @@ class Service:
         self.engine = engine
         self.settings = settings
         self.llm = get_llm_adapter(settings.llm_provider)
+        from .jev import get_assist
+
+        self.assist = get_assist(settings)
 
     # ------------------------------------------------------------ master data
     def load_master(self, seed_dir: Path) -> dict[str, int]:
         rd = lambda n: json.loads((seed_dir / f"{n}.json").read_text())  # noqa: E731
+        opt = lambda n: rd(n) if (seed_dir / f"{n}.json").exists() else ([] if n != "sources" else {})  # noqa: E731
         vs, ps, gs, hs = rd("vendors"), rd("purchase_orders"), rd("grns"), rd("invoice_history")
+        srcs, cts, gst, bcs, pays = opt("sources"), opt("contracts"), opt("gst_registry"), opt("bank_changes"), opt("payments")
         with self.engine.begin() as c:
-            for t in (db.vendors, db.purchase_orders, db.grns, db.invoice_history):
+            for t in (db.vendors, db.purchase_orders, db.grns, db.invoice_history, db.source_snapshots, db.contracts,
+                      db.gst_registry, db.bank_changes, db.payments):
                 c.execute(delete(t))
             c.execute(insert(db.vendors), [{**v, "aliases": db.dumps(v.get("aliases", []))} for v in vs])
-            c.execute(insert(db.purchase_orders), [{**p, "lines": db.dumps(p["lines"])} for p in ps])
+            c.execute(insert(db.purchase_orders), [{**p, "lines": db.dumps(p["lines"]), "updated_at": p.get("updated_at") or p.get("po_date"),
+                                                    "revision": p.get("revision", 1)} for p in ps])
             c.execute(insert(db.grns), [{**g, "lines": db.dumps(g["lines"])} for g in gs])
             c.execute(insert(db.invoice_history), [{**h, "lines": db.dumps(h["lines"])} for h in hs])
-        return {"vendors": len(vs), "purchase_orders": len(ps), "grns": len(gs), "invoice_history": len(hs)}
+            if srcs:
+                c.execute(insert(db.source_snapshots), [{"system": k, **v} for k, v in srcs.items()])
+            for t, rows in ((db.contracts, cts), (db.gst_registry, gst), (db.payments, pays)):
+                if rows:
+                    c.execute(insert(t), rows)
+            if bcs:
+                c.execute(insert(db.bank_changes), [{**b, "callback_verified": int(bool(b["callback_verified"]))} for b in bcs])
+        return {"vendors": len(vs), "purchase_orders": len(ps), "grns": len(gs), "invoice_history": len(hs), "contracts": len(cts),
+                "gst_registry": len(gst), "bank_changes": len(bcs), "payments": len(pays)}
 
     def reset(self) -> None:
         with self.engine.begin() as c:
-            for t in (db.run_events, db.reviews, db.jobs, db.runs, db.invoices):
+            for t in (db.run_events, db.reviews, db.jobs, db.runs, db.invoices, db.evidence, db.model_calls):
                 c.execute(delete(t))
 
     def master_data(self, exclude_invoice_id: Optional[str], before: Optional[str]) -> MasterData:
@@ -77,7 +96,8 @@ class Service:
                     POLine(l["line_no"], l["sku"], l.get("description", ""), Decimal(str(l["quantity"])), Decimal(str(l["unit_price"])), Decimal(str(l["tax_rate"])))
                     for l in db.loads(r.lines, [])
                 ]
-                pos[r.po_number.upper()] = PurchaseOrder(r.po_number, r.vendor_id, r.currency, r.status, parse_date(r.po_date), lines)
+                pos[r.po_number.upper()] = PurchaseOrder(r.po_number, r.vendor_id, r.currency, r.status, parse_date(r.po_date), lines,
+                                                         parse_date(r.updated_at) or parse_date(r.po_date), r.revision or 1)
             received: dict[tuple[str, int], Decimal] = {}
             grn_refs: dict[str, list[str]] = {}
             for r in c.execute(select(db.grns)):
@@ -118,7 +138,15 @@ class Service:
                         [{"line_no": l.line_no, "sku": l.sku, "quantity": str(l.quantity), "amount": str(l.quantity * l.unit_price)} for l in inv.lines],
                     )
                 )
-        return MasterData(vendors, pos, received, grn_refs, priors)
+            contracts = [Contract(r.contract_id, r.vendor_id, r.sku, Decimal(r.unit_price), r.currency, parse_date(r.valid_from), parse_date(r.valid_to))
+                         for r in c.execute(select(db.contracts))]
+            gst = {r.gstin: GstRecord(r.gstin, r.legal_name, r.status, r.state_code, parse_date(r.status_date)) for r in c.execute(select(db.gst_registry))}
+            bank_changes = [BankChange(r.vendor_id, r.new_account_last4, parse_date(r.changed_at), r.changed_by, bool(r.callback_verified))
+                            for r in c.execute(select(db.bank_changes))]
+            payments = [Payment(r.payment_id, r.vendor_id, r.account_last4, parse_date(r.paid_on), Decimal(r.amount or "0"), r.invoice_ref)
+                        for r in c.execute(select(db.payments))]
+            sources = {r.system: {"name": r.name, "as_of": r.as_of, "owner": r.owner} for r in c.execute(select(db.source_snapshots))}
+        return MasterData(vendors, pos, received, grn_refs, priors, contracts, gst, bank_changes, payments, sources)
 
     # ------------------------------------------------------------ ingest
     def ingest(self, payload: dict[str, Any], idempotency_key: Optional[str] = None, expected: Optional[dict] = None, auto_run: bool = True) -> dict[str, Any]:
@@ -201,7 +229,12 @@ class Service:
                 time.sleep(delay)
             self.emit(run_id, r.step, r.status, r.title, r.summary, r.to_dict(), attempt)
 
-        steps, decision = run_pipeline(inv, md, self.settings, on_step=on_step, llm=self.llm, attempt=attempt)
+        from .telemetry import span
+
+        with span("pipeline.run", {"run.id": run_id, "invoice.id": inv_row.id, "run.attempt": attempt, "ruleset": self.settings.ruleset_version}) as sp:
+            steps, decision = run_pipeline(inv, md, self.settings, on_step=on_step, llm=self.llm, attempt=attempt, assist=self.assist)
+            sp.set_attribute("decision", decision.decision)
+            sp.set_attribute("decision.primary_reason", decision.primary_reason or "")
         vendor_id = next((s.data.get("vendor_id") for s in steps if s.step == "vendor_match"), None)
         matched_po = next((s.data.get("po_number") for s in steps if s.step == "po_lookup"), None)
         dur = int((time.perf_counter() - t0) * 1000)
@@ -215,6 +248,16 @@ class Service:
                 )
             )
             if res.rowcount:
+                ev_rows = [{k: (db.dumps(v) if k in ("expected", "actual") and v is not None and not isinstance(v, str) else v)
+                            for k, v in e.items() if k in db.evidence.c.keys()} | {"run_id": run_id, "attempt": attempt}
+                           for st in steps for e in st.evidence]
+                if ev_rows:
+                    c.execute(insert(db.evidence), ev_rows)
+                mc_rows = [{"run_id": run_id, "step": st.step, **{k: (db.dumps(v) if k in ("options", "answer") and v is not None else v)
+                                                                  for k, v in mc.items() if k in db.model_calls.c.keys()}}
+                           for st in steps for mc in st.model_calls]
+                if mc_rows:
+                    c.execute(insert(db.model_calls), mc_rows)
                 self._event(c, run_id, "done", "info", "Run completed", decision.decision, decision.to_dict(), attempt)
         return {"run_id": run_id, "decision": decision.decision, "primary_reason": decision.primary_reason, "confidence": decision.confidence}
 
@@ -321,7 +364,36 @@ class Service:
         d["invoice"]["payload"] = payload
         d["events"] = [self._event_dict(e) for e in evs]
         d["reviews"] = [{"action": x.action, "final_decision": x.final_decision, "reviewer": x.reviewer, "note": x.note, "created_at": x.created_at} for x in revs]
+        d.update(self.evidence_for(run_id))
         return d
+
+    def evidence_for(self, run_id: str) -> dict[str, Any]:
+        """Evidence records (latest attempt) and model calls for a run: the audit trail behind its decision."""
+        with self.engine.connect() as c:
+            evs = c.execute(select(db.evidence).where(db.evidence.c.run_id == run_id).order_by(db.evidence.c.id)).all()
+            mcs = c.execute(select(db.model_calls).where(db.model_calls.c.run_id == run_id).order_by(db.model_calls.c.id)).all()
+        last = max((e.attempt or 0 for e in evs), default=0)
+        from .evidence import SOURCE_SYSTEMS
+
+        def val(x):
+            if x is None:
+                return None
+            try:
+                return json.loads(x) if x[:1] in "[{" else x
+            except ValueError:
+                return x
+        evidence = [{k: getattr(e, k) for k in db.evidence.c.keys() if k not in ("id", "run_id")} | {"source_name": SOURCE_SYSTEMS.get(e.source_system, e.source_system)}
+                    for e in evs if (e.attempt or 0) == last]
+        for e in evidence:
+            e["expected"], e["actual"] = val(e["expected"]), val(e["actual"])
+        calls = [{k: getattr(m, k) for k in db.model_calls.c.keys() if k not in ("id", "run_id")} for m in mcs]
+        for m in calls:
+            m["options"], m["answer"] = db.loads(m["options"]), db.loads(m["answer"])
+        sources = sorted({e["source_system"] for e in evidence})
+        return {"evidence": evidence, "model_calls": calls, "evidence_summary": {
+            "records": len(evidence), "sources": sources,
+            "mismatches": sum(1 for e in evidence if e["result"] in ("mismatch", "missing")),
+            "model_calls": len(calls), "model_cost_usd": round(sum(m["cost_usd"] or 0 for m in calls), 6)}}
 
     def submit_review(self, run_id: str, action: str, reviewer: str, note: str = "", final_decision: Optional[str] = None) -> dict[str, Any]:
         mapping = {"approve": "APPROVE", "reject": "REJECT"}

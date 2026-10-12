@@ -138,6 +138,11 @@ _HANDOFF: dict[str, tuple[str, str, str, bool]] = {
     "CREDIT_EXCEEDS_INVOICE": ("The credit is bigger than the invoice. Is the amount right?", "AP", "Ask the vendor to confirm the credit amount.", True),
     "UNSUPPORTED_DOC_TYPE": ("This is not an invoice. Wait for the final tax invoice?", "AP", "Do not pay on a quote or proforma.", True),
     "LOW_CONFIDENCE": ("All checks passed, but on fuzzy matches. Are the vendor and PO right?", "AP", "Check the highlighted matches, then approve with a note.", False),
+    "CONTRACT_PRICE_CONFLICT": ("The PO price is above the rate contract. Which is right: the contract or the PO?", "Buyer / procurement", "If the contract is right, amend the PO and ask the vendor to re-bill at the contract price; if the PO is right, update the contract with approval.", False),
+    "GSTIN_NOT_ACTIVE": ("The GST registry shows this registration is not active. Has the vendor re-registered, or should we stop paying GST to them?", "Tax team", "Check the GSTIN on the GST portal; ask the vendor for a valid registration and a fresh invoice. Do not claim input tax credit on this one.", True),
+    "VENDOR_BANK_RECENTLY_CHANGED": ("The vendor's bank account on file changed a few days ago and was never verified. Did the vendor really change it?", "Vendor master team", "Call the contact already on file (not any number on the invoice or the change request) and verify; until then, do not pay.", False),
+    "PO_CHANGED_AFTER_INVOICE": ("The PO was edited after the invoice date. Was the change legitimate and approved?", "Buyer / procurement", "Open the PO change history, confirm who changed it and why, then approve with a note or reject.", False),
+    "SUSPICIOUS_INSTRUCTIONS": ("The document contains text that tries to instruct the system. Is this a genuine invoice?", "AP", "Treat the text as a red flag; verify the invoice with the vendor through known contacts before paying.", False),
     "SYSTEM_ERROR": ("Processing failed. Re-run, or review by hand?", "AP / on-call engineer", "Re-run the invoice; if it fails again, process it manually.", False),
 }
 

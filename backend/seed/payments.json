@@ -1,0 +1,42 @@
+[
+  {
+    "payment_id": "PAY-9001",
+    "vendor_id": "V002",
+    "account_last4": "4411",
+    "paid_on": "2026-09-20",
+    "amount": "80640.00",
+    "invoice_ref": "HIST-0001"
+  },
+  {
+    "payment_id": "PAY-9002",
+    "vendor_id": "V001",
+    "account_last4": "5678",
+    "paid_on": "2026-09-02",
+    "amount": "21240.00",
+    "invoice_ref": "HIST-0002"
+  },
+  {
+    "payment_id": "PAY-9003",
+    "vendor_id": "V001",
+    "account_last4": "5678",
+    "paid_on": "2026-09-18",
+    "amount": "23895.00",
+    "invoice_ref": "HIST-0003"
+  },
+  {
+    "payment_id": "PAY-9004",
+    "vendor_id": "V006",
+    "account_last4": "8877",
+    "paid_on": "2026-08-30",
+    "amount": "41300.00",
+    "invoice_ref": "ERP-77120"
+  },
+  {
+    "payment_id": "PAY-9005",
+    "vendor_id": "V008",
+    "account_last4": "3311",
+    "paid_on": "2026-08-12",
+    "amount": "96760.00",
+    "invoice_ref": "ERP-77002"
+  }
+]

@@ -99,15 +99,20 @@ def parse_document_text(text: str, method: str = "text", ocr_confidence: float |
     buyer_gstin = buyer_gstin or os.environ.get("BUYER_GSTIN", "33AABCZ4321P1Z4")
     out: dict[str, Any] = {"source": "pdf" if method != "plain" else "text", "lines": []}
     found: dict[str, Any] = {}
+    regions: dict[str, dict[str, Any]] = {}
     for field, rx in _RX.items():
         m = rx.search(text)
         if m:
             found[field] = m.group(1).strip()
+            regions[field] = _region(text, m.start(1))
     first = next((l.strip() for l in text.splitlines() if l.strip()), "")
     found["vendor_name"] = re.split(r"\s{2,}|\s\|\s", first)[0][:120] if first and not re.match(r"^(tax\s+)?invoice\b", first, re.I) else None
     gstins = [g for g in GSTIN_ANY.findall(text) if g != buyer_gstin]
     if gstins:
         found["vendor_tax_id"] = gstins[0]
+        regions["vendor_tax_id"] = _region(text, text.find(gstins[0]))
+    if found.get("vendor_name"):
+        regions["vendor_name"] = _region(text, text.find(first))
     up = text.upper()
     out["doc_type"] = "credit_note" if "CREDIT NOTE" in up else ("proforma" if "PROFORMA" in up else "invoice")
     out["gst_type"] = "IGST" if re.search(r"\bIGST\b", up) else ("CGST_SGST" if re.search(r"\bCGST\b", up) and re.search(r"\b(SGST|UTGST)\b", up) else None)
@@ -164,8 +169,22 @@ def parse_document_text(text: str, method: str = "text", ocr_confidence: float |
         conf = 0.75 if method == "text" else min(0.7, base_conf)
     out["extraction_confidence"] = conf
     out["extraction"] = {"method": method, "fields": field_conf, "checks": checks, "missing": missing,
-                         "ocr_mean_confidence": round(ocr_confidence, 1) if ocr_confidence is not None else None}
+                         "ocr_mean_confidence": round(ocr_confidence, 1) if ocr_confidence is not None else None,
+                         "regions": regions,
+                         # Kept so a person (or the optional field-check model) can compare values with the source text.
+                         "text": text[:8000]}
     return out
+
+
+def _region(text: str, pos: int) -> dict[str, Any]:
+    """Page (pdftotext separates pages with form feeds), line on that page, and the line's text."""
+    if pos < 0:
+        return {}
+    page_start = text.rfind("\f", 0, pos) + 1
+    line_start = text.rfind("\n", 0, pos) + 1
+    line_end = text.find("\n", pos)
+    return {"page": text.count("\f", 0, pos) + 1, "line": text.count("\n", page_start, pos) + 1,
+            "text": re.sub(r"\s+", " ", text[line_start: line_end if line_end >= 0 else None]).strip()[:120]}
 
 
 def parse_pdf_text(text: str) -> dict[str, Any]:  # backwards-compatible name used by tests / .txt uploads

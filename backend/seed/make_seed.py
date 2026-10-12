@@ -19,6 +19,9 @@ VENDORS = [
     {"id": "V005", "name": "Shadow Traders", "tax_id": "27AAQCS0001R1Z0", "currency": "INR", "bank_account": "11223344556677", "status": "blocked", "aliases": []},
     {"id": "V006", "name": "Kaveri Office Solutions Pvt Ltd", "tax_id": "33AAKCK7788M1ZN", "currency": "INR", "bank_account": "60221100998877", "status": "active", "aliases": []},
     {"id": "V007", "name": "Deccan Electricals Pvt Ltd", "tax_id": "29AADCD4455E1ZP", "currency": "INR", "bank_account": "77450011223344", "status": "active", "aliases": []},
+    # Sources-of-truth cases (rules-v3)
+    {"id": "V008", "name": "Coromandel Chemicals Pvt Ltd", "tax_id": "33AACCC5566H1ZQ", "currency": "INR", "bank_account": "88990011447700", "status": "active", "aliases": []},
+    {"id": "V009", "name": "Vellore Textiles", "tax_id": "33AAFFV9012T1ZK", "currency": "INR", "bank_account": "45001122339988", "status": "active", "aliases": []},
 ]
 # GSTINs above carry valid check characters (see app.domain.gstin_check_char). Buyer: 33AABCZ4321P1Z4 (Tamil Nadu).
 
@@ -57,7 +60,22 @@ POS = [
      "lines": [L(1, "TRF-500KVA", "500 kVA distribution transformer", 1, "640000.00", "0.18"), L(2, "HT-CBL-240", "HT cable 240 sq mm (metre)", 800, "720.00", "0.18")]},
     {"po_number": "PO-1014", "vendor_id": "V006", "currency": "INR", "status": "open", "po_date": "2026-09-29",
      "lines": [L(1, "TNR-HP88", "Toner cartridge HP 88A", 30, "2900.00", "0.18")]},
+    # ---- sources-of-truth cases (rules-v3)
+    {"po_number": "PO-1015", "vendor_id": "V008", "currency": "INR", "status": "open", "po_date": "2026-09-24",
+     "lines": [L(1, "CHM-IPA-20", "Isopropyl alcohol, 20 L can", 40, "2150.00", "0.18")]},
+    {"po_number": "PO-1016", "vendor_id": "V009", "currency": "INR", "status": "open", "po_date": "2026-09-18",
+     "lines": [L(1, "TXT-CTN-UNI", "Cotton uniform set", 120, "650.00", "0.05")]},
+    {"po_number": "PO-1017", "vendor_id": "V006", "currency": "INR", "status": "open", "po_date": "2026-09-30",
+     "lines": [L(1, "CHR-VIS", "Visitor chair", 25, "5200.00", "0.18")]},
+    {"po_number": "PO-1018", "vendor_id": "V007", "currency": "INR", "status": "open", "po_date": "2026-09-25", "updated_at": "2026-10-09", "revision": 2,
+     "lines": [L(1, "HT-CBL-240", "HT cable 240 sq mm (metre)", 200, "720.00", "0.18")]},
+    {"po_number": "PO-1019", "vendor_id": "V004", "currency": "USD", "status": "open", "po_date": "2026-10-01",
+     "lines": [L(1, "TAPE-48", "Packing tape 48mm, ship to Chennai DC2 (Sriperumbudur)", 300, "1.20", "0"),
+               L(2, "BOX-CORR-L", "Corrugated box, large, ship to Chennai DC2 (Sriperumbudur)", 1000, "0.80", "0")]},
 ]
+for _po in POS:  # PO register keeps a last-changed date; unchanged POs were last touched on their PO date
+    _po.setdefault("updated_at", _po["po_date"])
+    _po.setdefault("revision", 1)
 
 GRNS = [
     {"grn_id": "GRN-5001", "po_number": "PO-1001", "received_date": "2026-09-20", "lines": [{"line_no": 1, "quantity": 500}, {"line_no": 2, "quantity": 2000}]},
@@ -73,6 +91,65 @@ GRNS = [
     {"grn_id": "GRN-5012", "po_number": "PO-1012", "received_date": "2026-10-07", "lines": [{"line_no": 1, "quantity": 10}]},
     {"grn_id": "GRN-5013", "po_number": "PO-1013", "received_date": "2026-10-05", "lines": [{"line_no": 1, "quantity": 1}, {"line_no": 2, "quantity": 800}]},
     {"grn_id": "GRN-5014", "po_number": "PO-1014", "received_date": "2026-10-07", "lines": [{"line_no": 1, "quantity": 30}]},
+    {"grn_id": "GRN-5015", "po_number": "PO-1015", "received_date": "2026-10-06", "lines": [{"line_no": 1, "quantity": 40}]},
+    {"grn_id": "GRN-5016", "po_number": "PO-1016", "received_date": "2026-10-03", "lines": [{"line_no": 1, "quantity": 120}]},
+    {"grn_id": "GRN-5017", "po_number": "PO-1017", "received_date": "2026-10-07", "lines": [{"line_no": 1, "quantity": 25}]},
+    {"grn_id": "GRN-5018", "po_number": "PO-1018", "received_date": "2026-10-06", "lines": [{"line_no": 1, "quantity": 200}]},
+    {"grn_id": "GRN-5019", "po_number": "PO-1019", "received_date": "2026-10-08", "lines": [{"line_no": 1, "quantity": 300}, {"line_no": 2, "quantity": 1000}]},
+]
+
+# ---- Other systems of record (all synthetic). Each has an "as of" snapshot time in sources.json.
+SOURCES = {
+    "vendor_master": {"name": "Vendor master (ERP)", "as_of": "2026-10-11T18:00:00+05:30", "owner": "Vendor master team"},
+    "po_register": {"name": "Purchase order register (ERP)", "as_of": "2026-10-11T18:00:00+05:30", "owner": "Procurement"},
+    "grn": {"name": "Goods receipts (warehouse / ERP)", "as_of": "2026-10-11T18:00:00+05:30", "owner": "Receiving"},
+    "contracts": {"name": "Rate contracts / price list", "as_of": "2026-10-01T09:00:00+05:30", "owner": "Procurement"},
+    "gst_registry": {"name": "GST registry (GSTN snapshot)", "as_of": "2026-10-10T06:00:00+05:30", "owner": "Tax team (via GSP API)"},
+    "bank_change_log": {"name": "Vendor bank-change log", "as_of": "2026-10-11T18:00:00+05:30", "owner": "Vendor master team"},
+    "payment_history": {"name": "Payment history (bank statement)", "as_of": "2026-10-11T06:00:00+05:30", "owner": "Treasury"},
+    "ap_ledger": {"name": "Prior invoices (AP ledger)", "as_of": "2026-10-11T18:00:00+05:30", "owner": "AP"},
+}
+
+# Rate contracts: the agreed price per vendor + SKU. Matches the PO price everywhere except CHR-VIS, where the PO
+# was raised above the contract (a conflict between two systems of record that a person must resolve).
+CONTRACTS = []
+_seen = set()
+for _po in POS:
+    for _l in _po["lines"]:
+        key = (_po["vendor_id"], _l["sku"])
+        if key in _seen or _l["sku"] == "MISC":
+            continue
+        _seen.add(key)
+        price = "4800.00" if _l["sku"] == "CHR-VIS" else _l["unit_price"]
+        CONTRACTS.append({"contract_id": f"RC-{_po['vendor_id']}-{len(CONTRACTS) + 1:03d}", "vendor_id": _po["vendor_id"], "sku": _l["sku"],
+                          "unit_price": price, "currency": _po["currency"], "valid_from": "2026-04-01", "valid_to": "2027-03-31"})
+
+# GST registry snapshot (in production: GSTN "search taxpayer" via a GST Suvidha Provider).
+GST_REGISTRY = [
+    {"gstin": "29AABCA1234F1Z5", "legal_name": "Acme Industrial Supplies Private Limited", "status": "Active", "state_code": "29", "status_date": "2019-07-01"},
+    {"gstin": "33AAGFB5521K1ZN", "legal_name": "Brightline Logistics LLP", "status": "Active", "state_code": "33", "status_date": "2020-02-11"},
+    {"gstin": "27AAQCS0001R1Z0", "legal_name": "Shadow Traders", "status": "Suspended", "state_code": "27", "status_date": "2026-05-02"},
+    {"gstin": "33AAKCK7788M1ZN", "legal_name": "Kaveri Office Solutions Private Limited", "status": "Active", "state_code": "33", "status_date": "2018-04-01"},
+    {"gstin": "29AADCD4455E1ZP", "legal_name": "Deccan Electricals Private Limited", "status": "Active", "state_code": "29", "status_date": "2021-09-15"},
+    {"gstin": "33AACCC5566H1ZQ", "legal_name": "Coromandel Chemicals Private Limited", "status": "Active", "state_code": "33", "status_date": "2022-01-10"},
+    {"gstin": "33AAFFV9012T1ZK", "legal_name": "Vellore Textiles", "status": "Cancelled", "state_code": "33", "status_date": "2026-09-30"},
+]
+
+# Vendor master audit log: bank-account changes. Coromandel's account was changed 4 days before its invoice and
+# never verified by a call-back to the known contact (the classic "change the master first" fraud pattern).
+BANK_CHANGES = [
+    {"vendor_id": "V001", "new_account_last4": "5678", "changed_at": "2025-11-03", "changed_by": "vm.ops@buyer.example", "callback_verified": True},
+    {"vendor_id": "V006", "new_account_last4": "8877", "changed_at": "2026-02-14", "changed_by": "vm.ops@buyer.example", "callback_verified": True},
+    {"vendor_id": "V008", "new_account_last4": "7700", "changed_at": "2026-10-05", "changed_by": "portal-self-service", "callback_verified": False},
+]
+
+# Payments actually made (bank statement). Shows which account each vendor has been paid into before.
+PAYMENTS = [
+    {"payment_id": "PAY-9001", "vendor_id": "V002", "account_last4": "4411", "paid_on": "2026-09-20", "amount": "80640.00", "invoice_ref": "HIST-0001"},
+    {"payment_id": "PAY-9002", "vendor_id": "V001", "account_last4": "5678", "paid_on": "2026-09-02", "amount": "21240.00", "invoice_ref": "HIST-0002"},
+    {"payment_id": "PAY-9003", "vendor_id": "V001", "account_last4": "5678", "paid_on": "2026-09-18", "amount": "23895.00", "invoice_ref": "HIST-0003"},
+    {"payment_id": "PAY-9004", "vendor_id": "V006", "account_last4": "8877", "paid_on": "2026-08-30", "amount": "41300.00", "invoice_ref": "ERP-77120"},
+    {"payment_id": "PAY-9005", "vendor_id": "V008", "account_last4": "3311", "paid_on": "2026-08-12", "amount": "96760.00", "invoice_ref": "ERP-77002"},
 ]
 
 
@@ -189,11 +266,32 @@ INVOICES = [
         [L(1, "TNR-HP88", "Toner cartridge HP 88A", 30, "2900.00", "0.18")],
         H, "UNSUPPORTED_DOC_TYPE", tax_id="33AAKCK7788M1ZN", doc_type="proforma",
         story="A proforma (advance quote) sent to the AP inbox: everything matches, but it is not a tax invoice, so nothing is paid on it."),
+    # ---- Sources of truth: conflicts and freshness between systems of record (rules-v3)
+    inv("INV-23", "Sat 2026-10-10 2:00 PM IST (UTC+05:30)", "Kaveri Office Solutions Pvt Ltd", "KOS-0163", "2026-10-09", "INR", "PO-1017",
+        [L(1, "CHR-VIS", "Visitor chair", 25, "5200.00", "0.18")],
+        H, "CONTRACT_PRICE_CONFLICT", tax_id="33AAKCK7788M1ZN", bank="60221100998877", gst_type="CGST_SGST",
+        story="Invoice matches the PO exactly, but the PO itself was raised 8% above the rate contract. Two systems of record disagree, so a person decides which is right."),
+    inv("INV-24", "Sat 2026-10-10 2:30 PM IST (UTC+05:30)", "Vellore Textiles", "VT/118", "2026-10-08", "INR", "PO-1016",
+        [L(1, "TXT-CTN-UNI", "Cotton uniform set", 120, "650.00", "0.05")],
+        H, "GSTIN_NOT_ACTIVE", tax_id="33AAFFV9012T1ZK", bank="45001122339988", gst_type="CGST_SGST",
+        story="GSTIN passes the checksum, but the GST registry says the registration was cancelled on 30 Sep. Tax charged by a cancelled registration cannot be claimed."),
+    inv("INV-25", "Sat 2026-10-10 3:00 PM IST (UTC+05:30)", "Coromandel Chemicals Pvt Ltd", "CCPL-2290", "2026-10-09", "INR", "PO-1015",
+        [L(1, "CHM-IPA-20", "Isopropyl alcohol, 20 L can", 40, "2150.00", "0.18")],
+        H, "VENDOR_BANK_RECENTLY_CHANGED", tax_id="33AACCC5566H1ZQ", bank="88990011447700", gst_type="CGST_SGST",
+        story="Remit-to account matches the vendor master, so a simple check passes it. But the master's bank account was changed 4 days ago through self-service, never verified by call-back, and we have never paid that account."),
+    inv("INV-26", "Sat 2026-10-10 3:30 PM IST (UTC+05:30)", "Deccan Electricals Pvt Ltd", "DE/26-27/0431", "2026-10-07", "INR", "PO-1018",
+        [L(1, "HT-CBL-240", "HT cable 240 sq mm (metre)", 200, "720.00", "0.18")],
+        H, "PO_CHANGED_AFTER_INVOICE", tax_id="29AADCD4455E1ZP", bank="77450011223344", gst_type="IGST",
+        story="Everything matches, but the PO was revised (revision 2) on 9 Oct, after the invoice was issued on 7 Oct. The PO may have been edited to fit the bill."),
+    inv("INV-27", "Sat 2026-10-10 4:00 PM IST (UTC+05:30)", "Pacific Packaging Co", "PP-7815", "2026-10-09", "USD", None,
+        [L(None, "TAPE-48", "Packing tape 48mm - delivered to Chennai DC2, Sriperumbudur", 300, "1.20", "0")],
+        H, "PO_MISSING", story="No PO on the invoice and two open POs could fit. Rules cannot pick, so it is held; the optional Jev model suggests the likely PO (DC2) with a probability, and a person confirms."),
 ]
 
 
 def main():
-    for name, data in [("vendors", VENDORS), ("purchase_orders", POS), ("grns", GRNS), ("invoice_history", HISTORY), ("invoices", INVOICES)]:
+    for name, data in [("vendors", VENDORS), ("purchase_orders", POS), ("grns", GRNS), ("invoice_history", HISTORY), ("invoices", INVOICES),
+                       ("sources", SOURCES), ("contracts", CONTRACTS), ("gst_registry", GST_REGISTRY), ("bank_changes", BANK_CHANGES), ("payments", PAYMENTS)]:
         (HERE / f"{name}.json").write_text(json.dumps(data, indent=2) + "\n")
     print(f"wrote {len(INVOICES)} invoices, {len(POS)} POs, {len(GRNS)} GRNs, {len(VENDORS)} vendors, {len(HISTORY)} history")
 

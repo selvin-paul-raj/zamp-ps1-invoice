@@ -214,6 +214,8 @@ class PurchaseOrder:
     status: str  # open | closed | cancelled
     po_date: Optional[date]
     lines: list[POLine]
+    updated_at: Optional[date] = None  # last change in the PO register (freshness / conflict check)
+    revision: int = 1
 
     @property
     def total(self) -> Decimal:
@@ -236,12 +238,64 @@ class PriorInvoice:
 
 
 @dataclass
+class Contract:
+    """Rate contract / price list line: the price procurement agreed with the vendor for a SKU."""
+
+    contract_id: str
+    vendor_id: str
+    sku: str
+    unit_price: Decimal
+    currency: str
+    valid_from: Optional[date]
+    valid_to: Optional[date]
+
+
+@dataclass
+class GstRecord:
+    """Snapshot row from the GST registry (in production: a GSTN lookup through a GSP)."""
+
+    gstin: str
+    legal_name: str
+    status: str  # Active | Cancelled | Suspended
+    state_code: str
+    status_date: Optional[date] = None
+
+
+@dataclass
+class BankChange:
+    """Vendor master change log: when the bank account on file changed and whether it was verified by call-back."""
+
+    vendor_id: str
+    new_account_last4: str
+    changed_at: Optional[date]
+    changed_by: str
+    callback_verified: bool
+
+
+@dataclass
+class Payment:
+    """Payment history from the bank: what we actually paid, and to which account."""
+
+    payment_id: str
+    vendor_id: str
+    account_last4: str
+    paid_on: Optional[date]
+    amount: Decimal
+    invoice_ref: str
+
+
+@dataclass
 class MasterData:
     vendors: dict[str, Vendor]
     pos: dict[str, PurchaseOrder]
     received: dict[tuple[str, int], Decimal]  # (po_number, line_no) -> qty received across GRNs
     grn_refs: dict[str, list[str]]  # po_number -> grn ids
     priors: list[PriorInvoice]
+    contracts: list[Contract] = field(default_factory=list)
+    gst_registry: dict[str, GstRecord] = field(default_factory=dict)
+    bank_changes: list[BankChange] = field(default_factory=list)
+    payments: list[Payment] = field(default_factory=list)
+    sources: dict[str, dict] = field(default_factory=dict)  # system id -> {name, as_of, owner}
 
 
 @dataclass
@@ -266,6 +320,8 @@ class StepResult:
     findings: list[Finding] = field(default_factory=list)
     data: dict[str, Any] = field(default_factory=dict)
     confidence: float = 1.0  # multiplicative factor on approve-confidence
+    evidence: list[dict[str, Any]] = field(default_factory=list)  # one record per check (see app.evidence)
+    model_calls: list[dict[str, Any]] = field(default_factory=list)  # Jev / LLM calls made in this step
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

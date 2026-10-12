@@ -1,0 +1,23 @@
+[
+  {
+    "vendor_id": "V001",
+    "new_account_last4": "5678",
+    "changed_at": "2025-11-03",
+    "changed_by": "vm.ops@buyer.example",
+    "callback_verified": true
+  },
+  {
+    "vendor_id": "V006",
+    "new_account_last4": "8877",
+    "changed_at": "2026-02-14",
+    "changed_by": "vm.ops@buyer.example",
+    "callback_verified": true
+  },
+  {
+    "vendor_id": "V008",
+    "new_account_last4": "7700",
+    "changed_at": "2026-10-05",
+    "changed_by": "portal-self-service",
+    "callback_verified": false
+  }
+]

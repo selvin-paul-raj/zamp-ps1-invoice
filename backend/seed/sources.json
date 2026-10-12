@@ -1,0 +1,42 @@
+{
+  "vendor_master": {
+    "name": "Vendor master (ERP)",
+    "as_of": "2026-10-11T18:00:00+05:30",
+    "owner": "Vendor master team"
+  },
+  "po_register": {
+    "name": "Purchase order register (ERP)",
+    "as_of": "2026-10-11T18:00:00+05:30",
+    "owner": "Procurement"
+  },
+  "grn": {
+    "name": "Goods receipts (warehouse / ERP)",
+    "as_of": "2026-10-11T18:00:00+05:30",
+    "owner": "Receiving"
+  },
+  "contracts": {
+    "name": "Rate contracts / price list",
+    "as_of": "2026-10-01T09:00:00+05:30",
+    "owner": "Procurement"
+  },
+  "gst_registry": {
+    "name": "GST registry (GSTN snapshot)",
+    "as_of": "2026-10-10T06:00:00+05:30",
+    "owner": "Tax team (via GSP API)"
+  },
+  "bank_change_log": {
+    "name": "Vendor bank-change log",
+    "as_of": "2026-10-11T18:00:00+05:30",
+    "owner": "Vendor master team"
+  },
+  "payment_history": {
+    "name": "Payment history (bank statement)",
+    "as_of": "2026-10-11T06:00:00+05:30",
+    "owner": "Treasury"
+  },
+  "ap_ledger": {
+    "name": "Prior invoices (AP ledger)",
+    "as_of": "2026-10-11T18:00:00+05:30",
+    "owner": "AP"
+  }
+}

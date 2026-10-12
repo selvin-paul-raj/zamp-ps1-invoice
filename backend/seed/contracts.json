@@ -1,0 +1,182 @@
+[
+  {
+    "contract_id": "RC-V001-001",
+    "vendor_id": "V001",
+    "sku": "STL-ROD-12",
+    "unit_price": "120.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V001-002",
+    "vendor_id": "V001",
+    "sku": "BOLT-M10",
+    "unit_price": "8.50",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V002-003",
+    "vendor_id": "V002",
+    "sku": "FRT-BLR-CHN",
+    "unit_price": "18000.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V003-004",
+    "vendor_id": "V003",
+    "sku": "TMP-SNS-200",
+    "unit_price": "42.00",
+    "currency": "EUR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V004-005",
+    "vendor_id": "V004",
+    "sku": "BOX-CORR-L",
+    "unit_price": "0.80",
+    "currency": "USD",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V001-006",
+    "vendor_id": "V001",
+    "sku": "WLD-ROD-3",
+    "unit_price": "45.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V006-007",
+    "vendor_id": "V006",
+    "sku": "CHR-ERG",
+    "unit_price": "9500.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V006-008",
+    "vendor_id": "V006",
+    "sku": "DSK-STD",
+    "unit_price": "14000.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V002-009",
+    "vendor_id": "V002",
+    "sku": "FRT-BLR-HYD",
+    "unit_price": "21000.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V006-010",
+    "vendor_id": "V006",
+    "sku": "TNR-HP26",
+    "unit_price": "3200.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V004-011",
+    "vendor_id": "V004",
+    "sku": "TAPE-48",
+    "unit_price": "1.20",
+    "currency": "USD",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V006-012",
+    "vendor_id": "V006",
+    "sku": "PPR-A4-500",
+    "unit_price": "260.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V006-013",
+    "vendor_id": "V006",
+    "sku": "PEN-BLU-50",
+    "unit_price": "180.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V002-014",
+    "vendor_id": "V002",
+    "sku": "FRT-CHN-CBE",
+    "unit_price": "15000.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V007-015",
+    "vendor_id": "V007",
+    "sku": "TRF-500KVA",
+    "unit_price": "640000.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V007-016",
+    "vendor_id": "V007",
+    "sku": "HT-CBL-240",
+    "unit_price": "720.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V006-017",
+    "vendor_id": "V006",
+    "sku": "TNR-HP88",
+    "unit_price": "2900.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V008-018",
+    "vendor_id": "V008",
+    "sku": "CHM-IPA-20",
+    "unit_price": "2150.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V009-019",
+    "vendor_id": "V009",
+    "sku": "TXT-CTN-UNI",
+    "unit_price": "650.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "contract_id": "RC-V006-020",
+    "vendor_id": "V006",
+    "sku": "CHR-VIS",
+    "unit_price": "4800.00",
+    "currency": "INR",
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  }
+]

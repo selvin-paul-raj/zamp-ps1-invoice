@@ -1,0 +1,51 @@
+[
+  {
+    "gstin": "29AABCA1234F1Z5",
+    "legal_name": "Acme Industrial Supplies Private Limited",
+    "status": "Active",
+    "state_code": "29",
+    "status_date": "2019-07-01"
+  },
+  {
+    "gstin": "33AAGFB5521K1ZN",
+    "legal_name": "Brightline Logistics LLP",
+    "status": "Active",
+    "state_code": "33",
+    "status_date": "2020-02-11"
+  },
+  {
+    "gstin": "27AAQCS0001R1Z0",
+    "legal_name": "Shadow Traders",
+    "status": "Suspended",
+    "state_code": "27",
+    "status_date": "2026-05-02"
+  },
+  {
+    "gstin": "33AAKCK7788M1ZN",
+    "legal_name": "Kaveri Office Solutions Private Limited",
+    "status": "Active",
+    "state_code": "33",
+    "status_date": "2018-04-01"
+  },
+  {
+    "gstin": "29AADCD4455E1ZP",
+    "legal_name": "Deccan Electricals Private Limited",
+    "status": "Active",
+    "state_code": "29",
+    "status_date": "2021-09-15"
+  },
+  {
+    "gstin": "33AACCC5566H1ZQ",
+    "legal_name": "Coromandel Chemicals Private Limited",
+    "status": "Active",
+    "state_code": "33",
+    "status_date": "2022-01-10"
+  },
+  {
+    "gstin": "33AAFFV9012T1ZK",
+    "legal_name": "Vellore Textiles",
+    "status": "Cancelled",
+    "state_code": "33",
+    "status_date": "2026-09-30"
+  }
+]

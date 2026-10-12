@@ -117,7 +117,7 @@ def test_api_samples_impact_and_api_prefix(tmp_path, monkeypatch):
         imp = client.get("/api/impact?monthly_invoices=2000&target_stp=0.8").json()
         assert imp["assumptions"]["monthly_invoices"] == 2000
         assert imp["scenario_target"]["hours_saved"] > 0
-        assert client.get("/health").json()["ruleset"] == "rules-v2"
+        assert client.get("/health").json()["ruleset"] == "rules-v3"
 
 
 def test_final_invoice_after_proforma_is_not_a_duplicate(svc, seed_invoices):

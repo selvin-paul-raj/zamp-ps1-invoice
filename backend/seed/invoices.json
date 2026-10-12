@@ -750,5 +750,174 @@
       "story": "A proforma (advance quote) sent to the AP inbox: everything matches, but it is not a tax invoice, so nothing is paid on it."
     },
     "doc_type": "proforma"
+  },
+  {
+    "id": "INV-23",
+    "received_at": "Sat 2026-10-10 2:00 PM IST (UTC+05:30)",
+    "source": "email",
+    "vendor_name": "Kaveri Office Solutions Pvt Ltd",
+    "vendor_tax_id": "33AAKCK7788M1ZN",
+    "invoice_number": "KOS-0163",
+    "invoice_date": "2026-10-09",
+    "currency": "INR",
+    "po_number": "PO-1017",
+    "bank_account": "60221100998877",
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "CHR-VIS",
+        "description": "Visitor chair",
+        "quantity": 25,
+        "unit_price": "5200.00",
+        "tax_rate": "0.18",
+        "amount": "130000.00",
+        "tax_amount": "23400.00"
+      }
+    ],
+    "subtotal": "130000.00",
+    "tax_total": "23400.00",
+    "total": "153400.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "CONTRACT_PRICE_CONFLICT",
+      "story": "Invoice matches the PO exactly, but the PO itself was raised 8% above the rate contract. Two systems of record disagree, so a person decides which is right."
+    },
+    "gst_type": "CGST_SGST"
+  },
+  {
+    "id": "INV-24",
+    "received_at": "Sat 2026-10-10 2:30 PM IST (UTC+05:30)",
+    "source": "email",
+    "vendor_name": "Vellore Textiles",
+    "vendor_tax_id": "33AAFFV9012T1ZK",
+    "invoice_number": "VT/118",
+    "invoice_date": "2026-10-08",
+    "currency": "INR",
+    "po_number": "PO-1016",
+    "bank_account": "45001122339988",
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TXT-CTN-UNI",
+        "description": "Cotton uniform set",
+        "quantity": 120,
+        "unit_price": "650.00",
+        "tax_rate": "0.05",
+        "amount": "78000.00",
+        "tax_amount": "3900.00"
+      }
+    ],
+    "subtotal": "78000.00",
+    "tax_total": "3900.00",
+    "total": "81900.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "GSTIN_NOT_ACTIVE",
+      "story": "GSTIN passes the checksum, but the GST registry says the registration was cancelled on 30 Sep. Tax charged by a cancelled registration cannot be claimed."
+    },
+    "gst_type": "CGST_SGST"
+  },
+  {
+    "id": "INV-25",
+    "received_at": "Sat 2026-10-10 3:00 PM IST (UTC+05:30)",
+    "source": "email",
+    "vendor_name": "Coromandel Chemicals Pvt Ltd",
+    "vendor_tax_id": "33AACCC5566H1ZQ",
+    "invoice_number": "CCPL-2290",
+    "invoice_date": "2026-10-09",
+    "currency": "INR",
+    "po_number": "PO-1015",
+    "bank_account": "88990011447700",
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "CHM-IPA-20",
+        "description": "Isopropyl alcohol, 20 L can",
+        "quantity": 40,
+        "unit_price": "2150.00",
+        "tax_rate": "0.18",
+        "amount": "86000.00",
+        "tax_amount": "15480.00"
+      }
+    ],
+    "subtotal": "86000.00",
+    "tax_total": "15480.00",
+    "total": "101480.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "VENDOR_BANK_RECENTLY_CHANGED",
+      "story": "Remit-to account matches the vendor master, so a simple check passes it. But the master's bank account was changed 4 days ago through self-service, never verified by call-back, and we have never paid that account."
+    },
+    "gst_type": "CGST_SGST"
+  },
+  {
+    "id": "INV-26",
+    "received_at": "Sat 2026-10-10 3:30 PM IST (UTC+05:30)",
+    "source": "email",
+    "vendor_name": "Deccan Electricals Pvt Ltd",
+    "vendor_tax_id": "29AADCD4455E1ZP",
+    "invoice_number": "DE/26-27/0431",
+    "invoice_date": "2026-10-07",
+    "currency": "INR",
+    "po_number": "PO-1018",
+    "bank_account": "77450011223344",
+    "notes": "",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "HT-CBL-240",
+        "description": "HT cable 240 sq mm (metre)",
+        "quantity": 200,
+        "unit_price": "720.00",
+        "tax_rate": "0.18",
+        "amount": "144000.00",
+        "tax_amount": "25920.00"
+      }
+    ],
+    "subtotal": "144000.00",
+    "tax_total": "25920.00",
+    "total": "169920.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "PO_CHANGED_AFTER_INVOICE",
+      "story": "Everything matches, but the PO was revised (revision 2) on 9 Oct, after the invoice was issued on 7 Oct. The PO may have been edited to fit the bill."
+    },
+    "gst_type": "IGST"
+  },
+  {
+    "id": "INV-27",
+    "received_at": "Sat 2026-10-10 4:00 PM IST (UTC+05:30)",
+    "source": "email",
+    "vendor_name": "Pacific Packaging Co",
+    "vendor_tax_id": null,
+    "invoice_number": "PP-7815",
+    "invoice_date": "2026-10-09",
+    "currency": "USD",
+    "po_number": null,
+    "bank_account": null,
+    "notes": "",
+    "lines": [
+      {
+        "line_no": null,
+        "sku": "TAPE-48",
+        "description": "Packing tape 48mm - delivered to Chennai DC2, Sriperumbudur",
+        "quantity": 300,
+        "unit_price": "1.20",
+        "tax_rate": "0",
+        "amount": "360.00",
+        "tax_amount": "0.00"
+      }
+    ],
+    "subtotal": "360.00",
+    "tax_total": "0.00",
+    "total": "360.00",
+    "expected": {
+      "decision": "HOLD_FOR_REVIEW",
+      "reason": "PO_MISSING",
+      "story": "No PO on the invoice and two open POs could fit. Rules cannot pick, so it is held; the optional Jev model suggests the likely PO (DC2) with a probability, and a person confirms."
+    }
   }
 ]
