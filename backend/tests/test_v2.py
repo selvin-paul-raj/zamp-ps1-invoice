@@ -118,3 +118,13 @@ def test_api_samples_impact_and_api_prefix(tmp_path, monkeypatch):
         assert imp["assumptions"]["monthly_invoices"] == 2000
         assert imp["scenario_target"]["hours_saved"] > 0
         assert client.get("/health").json()["ruleset"] == "rules-v2"
+
+
+def test_final_invoice_after_proforma_is_not_a_duplicate(svc, seed_invoices):
+    from conftest import run_in_order
+    run_in_order(svc, seed_invoices, ["INV-22"])  # proforma for the same toners
+    name = "KOS-0161_kaveri_scanned.pdf"
+    if not (shutil.which("tesseract") and shutil.which("pdftoppm")):
+        pytest.skip("OCR tools not installed")
+    run = run_one(svc, ingest.parse_upload(name, (PDFS / name).read_bytes())[0])
+    assert [r["code"] for r in run["reasons"]] == ["LOW_EXTRACTION_CONFIDENCE"]

@@ -109,6 +109,8 @@ class Service:
                 if status == "rejected":
                     continue
                 inv = Invoice.from_payload(db.loads(inv_row.payload))
+                if inv.doc_type not in ("invoice", "tax_invoice"):
+                    continue  # proformas and credit notes are not payable bills: never a duplicate of, or usage on, a PO
                 priors.append(
                     PriorInvoice(
                         inv_row.id, run.vendor_id, inv.invoice_number, run.matched_po or inv.po_number, inv.invoice_date, inv.total or Decimal("0"),
