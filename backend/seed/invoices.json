@@ -582,7 +582,7 @@
   },
   {
     "id": "INV-18",
-    "received_at": "Fri 2026-10-09 2:00 PM IST (UTC+05:30)",
+    "received_at": "2026-10-09T14:00:00+05:30",
     "source": "email",
     "vendor_name": "Brightline Logistics LLP",
     "vendor_tax_id": "33AAGFB5521K1ZN",
@@ -616,7 +616,7 @@
   },
   {
     "id": "INV-19",
-    "received_at": "Fri 2026-10-09 3:00 PM IST (UTC+05:30)",
+    "received_at": "2026-10-09T15:00:00+05:30",
     "source": "email",
     "vendor_name": "Kaveri Office Solutions Pvt Ltd",
     "vendor_tax_id": "33AAKCK7788M1ZM",
@@ -650,7 +650,7 @@
   },
   {
     "id": "INV-20",
-    "received_at": "Fri 2026-10-09 4:00 PM IST (UTC+05:30)",
+    "received_at": "2026-10-09T16:00:00+05:30",
     "source": "email",
     "vendor_name": "Deccan Electricals Pvt Ltd",
     "vendor_tax_id": "29AADCD4455E1ZP",
@@ -684,7 +684,7 @@
   },
   {
     "id": "INV-21",
-    "received_at": "Sat 2026-10-10 10:00 AM IST (UTC+05:30)",
+    "received_at": "2026-10-10T10:00:00+05:30",
     "source": "email",
     "vendor_name": "Acme Industrial Supplies Pvt Ltd",
     "vendor_tax_id": "29AABCA1234F1Z5",
@@ -719,7 +719,7 @@
   },
   {
     "id": "INV-22",
-    "received_at": "Sat 2026-10-10 11:00 AM IST (UTC+05:30)",
+    "received_at": "2026-10-10T11:00:00+05:30",
     "source": "email",
     "vendor_name": "Kaveri Office Solutions Pvt Ltd",
     "vendor_tax_id": "33AAKCK7788M1ZN",

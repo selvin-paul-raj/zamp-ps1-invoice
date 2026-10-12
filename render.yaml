@@ -1,0 +1,15 @@
+# Render Blueprint: free web service built from the root Dockerfile.
+# Render dashboard -> New -> Blueprint -> pick this repo -> Apply. Free instances sleep after ~15 min idle
+# (first request then takes ~30-60 s) and the SQLite file resets on redeploy; "Run demo seed" reloads everything.
+services:
+  - type: web
+    name: zamp-ps1-invoice-po
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PIPELINE_STEP_DELAY_MS
+        value: "350"
+      - key: APPROVE_CONFIDENCE_THRESHOLD
+        value: "0.85"

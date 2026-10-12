@@ -8,9 +8,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr
       - run: pip install -r requirements.txt
       - run: pytest -q
-      - run: python -m evals.run_evals   # exits non-zero on any false approval or accuracy < 100% on the labelled set
+      - run: python -m evals.run_evals   # non-zero on any false approval (labelled or adversarial) or accuracy < 100% on the labelled set
   frontend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: frontend } }

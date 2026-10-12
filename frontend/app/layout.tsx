@@ -13,9 +13,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="text-sm font-semibold">Invoice → PO Decisions</Link>
             <nav className="flex gap-4 text-sm text-muted-foreground">
               <Link href="/" className="hover:text-foreground">Run history</Link>
-              <Link href="/review" className="hover:text-foreground">Review queue</Link>
+              <Link href="/review/" className="hover:text-foreground">Review queue</Link>
             </nav>
-            <span className="ml-auto text-xs text-muted-foreground">rules-v1 · deterministic decision engine</span>
+            <span className="ml-auto text-xs text-muted-foreground">rules-v2 · code decides, AI reads · synthetic data</span>
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-6 py-6">{children}</main>

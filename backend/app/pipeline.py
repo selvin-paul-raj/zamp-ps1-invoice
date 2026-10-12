@@ -488,7 +488,7 @@ def run_pipeline(
     explain_step = StepResult(
         "explain", "Explanation",
         "pass" if text else "skip",
-        decision.explanation if text else "LLM adapter not configured; deterministic template explanation used.",
+        decision.explanation if text else "Written from a fixed template, so the same facts always give the same words. An LLM can rephrase it if one is configured.",
         [], {"adapter": llm.name, "explanation": decision.explanation},
     )
     results.append(explain_step)

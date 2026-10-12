@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { api, type Run } from "@/lib/api";
+import { api, runHref, type Run } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,12 +26,21 @@ function ReviewCard({ run, onDone }: { run: Run; onDone: () => void }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle>{run.invoice.vendor_name} · <span className="font-mono">{run.invoice.invoice_number}</span></CardTitle>
-            <CardDescription>{run.invoice.currency} {Number(run.invoice.total ?? 0).toLocaleString()} · PO {run.matched_po || run.invoice.po_number || "none"} · <Link className="underline" href={`/runs/${run.id}`}>open run</Link></CardDescription>
+            <CardDescription>{run.invoice.currency} {Number(run.invoice.total ?? 0).toLocaleString()} · PO {run.matched_po || run.invoice.po_number || "none"} · <Link className="underline" href={runHref(run.id)}>open run</Link></CardDescription>
           </div>
           <Badge variant="hold">HOLD · {run.confidence != null ? Math.round(run.confidence * 100) : "–"}%</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {run.handoff && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm">
+            <p className="font-medium">{run.handoff.question}</p>
+            <p className="mt-1 text-xs text-amber-900">Who answers: {run.handoff.owner} · Next: {run.handoff.next_action}</p>
+            {run.handoff.vendor_email_draft && (
+              <details className="mt-1 text-xs"><summary className="cursor-pointer">Draft vendor email (not sent)</summary><pre className="mt-1 whitespace-pre-wrap font-sans">{run.handoff.vendor_email_draft}</pre></details>
+            )}
+          </div>
+        )}
         <div className="space-y-1.5">
           {run.reasons.map((r, i) => (
             <div key={i} className="flex items-start gap-2 text-xs">
@@ -62,7 +71,7 @@ export default function ReviewQueue() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold">Review queue</h1>
-        <p className="text-sm text-muted-foreground">Invoices the engine would not auto-decide. Every action is written to the audit trail with the reviewer’s note.</p>
+        <p className="text-sm text-muted-foreground">Invoices the engine would not auto-decide. Each one arrives pre-investigated with one specific question and who should answer it. Every action is written to the audit trail with the reviewer’s note.</p>
       </div>
       {items.length === 0 && <p className="text-sm text-muted-foreground">Nothing waiting for review.</p>}
       <div className="grid gap-4 md:grid-cols-2">{items.map((r) => <ReviewCard key={r.id} run={r} onDone={load} />)}</div>

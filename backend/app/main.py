@@ -139,7 +139,9 @@ def demo_seed(reset: bool = True) -> dict[str, Any]:
 @app.get("/samples")
 def samples() -> list[dict[str, str]]:
     """Sample input files a viewer can download or run with one click."""
-    return [{"name": n, "description": d, "kind": n.rsplit(".", 1)[-1]} for n, d in SAMPLE_FILES.items() if _sample_path(n).exists()]
+    labels = {"sample_flaky.json": "ERP timeout (JSON)", "samples_upload.csv": "CSV invoice"}
+    return [{"name": n, "label": labels.get(n, n.split("_")[0]), "description": d, "kind": n.rsplit(".", 1)[-1]}
+            for n, d in SAMPLE_FILES.items() if _sample_path(n).exists()]
 
 
 @app.get("/samples/{name}")

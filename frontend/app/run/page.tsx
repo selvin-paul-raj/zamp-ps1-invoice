@@ -1,21 +1,61 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { CheckCircle2, CircleDashed, AlertTriangle, XCircle, MinusCircle, RotateCcw, Loader2, Info } from "lucide-react";
-import { api, API, type Run, type RunEvent, type Finding } from "@/lib/api";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CheckCircle2, CircleDashed, AlertTriangle, XCircle, MinusCircle, RotateCcw, Loader2, Info, HelpCircle, Copy, FileText } from "lucide-react";
+import { api, API, runHref, type Run, type RunEvent, type Finding, type Handoff } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DecisionBadge } from "@/components/decision-badge";
 import { cn } from "@/lib/utils";
 
-const PIPELINE = ["intake", "arithmetic", "vendor_match", "po_lookup", "currency", "three_way", "tax", "duplicates", "decide", "explain"];
+const PIPELINE = ["intake", "arithmetic", "vendor_match", "po_lookup", "currency", "three_way", "tax", "duplicates", "policy", "decide", "explain"];
+const CN_PIPELINE = ["intake", "arithmetic", "vendor_match", "credit_note", "currency", "three_way", "tax", "duplicates", "policy", "decide", "explain"];
 const LABELS: Record<string, string> = {
-  intake: "Intake & required fields", arithmetic: "Arithmetic validation", vendor_match: "Vendor master match", po_lookup: "PO lookup",
-  currency: "Currency check", three_way: "3-way match (invoice / PO / GRN)", tax: "Tax validation", duplicates: "Duplicate detection",
-  decide: "Decision (rules engine)", explain: "Explanation",
+  intake: "Intake & extraction", arithmetic: "Arithmetic validation", vendor_match: "Vendor master match (+ GSTIN check)", po_lookup: "PO lookup",
+  credit_note: "Credit-note match", currency: "Currency check", three_way: "3-way match (invoice / PO / GRN)", tax: "Tax & GST validation",
+  duplicates: "Duplicate & fraud checks", policy: "Approval policy", decide: "Decision (rules engine)", explain: "Explanation",
 };
+
+function HandoffCard({ h }: { h: Handoff }) {
+  const [copied, setCopied] = useState(false);
+  if (!h) return null;
+  return (
+    <Card className="border-amber-300">
+      <CardHeader><CardTitle className="flex items-center gap-2"><HelpCircle className="h-4 w-4 text-amber-600" />One question for a person</CardTitle>
+        <CardDescription>Pre-investigated: the evidence is in the timeline on the left.</CardDescription></CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        <p className="font-medium leading-snug">{h.question}</p>
+        <p className="text-xs"><span className="text-muted-foreground">Who answers:</span> {h.owner}</p>
+        <p className="text-xs"><span className="text-muted-foreground">Next step:</span> {h.next_action}</p>
+        {h.vendor_email_draft && (
+          <details className="rounded-md border border-border bg-muted/50 p-2 text-xs">
+            <summary className="cursor-pointer font-medium">Draft email to the vendor (not sent)</summary>
+            <pre className="mt-2 whitespace-pre-wrap font-sans">{h.vendor_email_draft}</pre>
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => { navigator.clipboard?.writeText(h.vendor_email_draft || ""); setCopied(true); }}><Copy className="h-3 w-3" />{copied ? "Copied" : "Copy"}</Button>
+          </details>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExtractionCard({ ex }: { ex: any }) {
+  if (!ex || !ex.method) return null;
+  const label = ex.method === "ocr" ? "Scanned PDF, read by OCR" : ex.method === "llm" ? "Unknown layout, read by LLM fallback" : ex.method === "text" ? "PDF text layer" : ex.method;
+  return (
+    <Card>
+      <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />Document extraction</CardTitle><CardDescription>{label}{ex.ocr_mean_confidence != null ? ` · OCR word confidence ${Math.round(ex.ocr_mean_confidence)}%` : ""}</CardDescription></CardHeader>
+      <CardContent className="space-y-1 text-xs">
+        {ex.fields && Object.entries(ex.fields).map(([k, v]: any) => (
+          <div key={k} className="flex justify-between gap-3"><span className="text-muted-foreground">{k}</span><span className={cn("tabular-nums", v === 0 && "text-rose-600")}>{v === 0 ? "not found" : `${Math.round(v * 100)}%`}</span></div>
+        ))}
+        {ex.checks && <div className="pt-1">{Object.entries(ex.checks).map(([k, v]: any) => <div key={k}>{v ? "✓" : "✗"} {k.replaceAll("_", " ")}</div>)}</div>}
+      </CardContent>
+    </Card>
+  );
+}
 
 function StatusIcon({ status }: { status?: string }) {
   if (!status) return <CircleDashed className="h-5 w-5 text-stone-300" />;
@@ -35,8 +75,12 @@ function FindingRow({ f }: { f: Finding }) {
   );
 }
 
-export default function RunPage() {
-  const { id } = useParams<{ id: string }>();
+export default function RunPageWrapper() {
+  return <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}><RunPage /></Suspense>;
+}
+
+function RunPage() {
+  const id = useSearchParams().get("id") || "";
   const router = useRouter();
   const [run, setRun] = useState<Run | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -61,12 +105,14 @@ export default function RunPage() {
   events.filter((e) => e.attempt === latestAttempt).forEach((e) => byStep.set(e.step, e));
   const retries = events.filter((e) => e.step === "retry");
   const running = live && !byStep.has("explain");
-  const nextStep = PIPELINE.find((s) => !byStep.has(s));
+  const isCN = run?.invoice?.payload?.doc_type === "credit_note" || byStep.has("credit_note");
+  const steps = isCN ? CN_PIPELINE : PIPELINE;
+  const nextStep = steps.find((s) => !byStep.has(s));
 
   async function rerun() {
     if (!run) return;
     const r = await api<{ run_id: string }>(`/invoices/${run.invoice_id}/runs`, { method: "POST", headers: { "Idempotency-Key": `ui-${run.invoice_id}-${Date.now()}` } });
-    router.push(`/runs/${r.run_id}`);
+    router.push(runHref(r.run_id));
   }
 
   const decideData = byStep.get("decide")?.data?.data;
@@ -81,7 +127,7 @@ export default function RunPage() {
           <div>
             <p className="text-xs text-muted-foreground">Run {id}{run ? ` · invoice ${run.invoice_id}` : ""}</p>
             <h1 className="text-xl font-semibold">{run?.invoice.vendor_name ?? "…"} <span className="font-mono text-base text-muted-foreground">{run?.invoice.invoice_number}</span></h1>
-            {expected?.story && <p className="mt-1 text-sm text-muted-foreground">Scenario: {expected.story}</p>}
+            {expected?.story && <p className="mt-1 text-sm text-muted-foreground">Demo scenario: {expected.story}</p>}
           </div>
           <div className="flex items-center gap-2">
             {running ? <Badge variant="hold"><Loader2 className="mr-1 h-3 w-3 animate-spin" />live</Badge> : <Badge variant="outline">finished</Badge>}
@@ -99,7 +145,7 @@ export default function RunPage() {
           <CardHeader><CardTitle>Pipeline</CardTitle><CardDescription>Streamed step by step over Server-Sent Events</CardDescription></CardHeader>
           <CardContent>
             <ol className="relative space-y-1">
-              {PIPELINE.map((s) => {
+              {steps.map((s) => {
                 const ev = byStep.get(s);
                 const findings: Finding[] = ev?.data?.findings ?? [];
                 const isNext = running && s === nextStep;
@@ -143,9 +189,20 @@ export default function RunPage() {
             {expected && !running && (
               <p className="flex items-center gap-1 text-xs text-muted-foreground"><Info className="h-3 w-3" />Label: {expected.decision}{expected.reason ? ` / ${expected.reason}` : ""} {expected.decision === decision ? "✓" : "✗"}</p>
             )}
-            {run?.review_status === "pending" && !running && <Button size="sm" variant="outline" onClick={() => router.push("/review")}>Open review queue</Button>}
+            {run?.review_status === "pending" && !running && <Button size="sm" variant="outline" onClick={() => router.push("/review/")}>Open review queue</Button>}
+            {run?.reviews && run.reviews.length > 0 && (
+              <div className="border-t border-border pt-2 text-xs">
+                <p className="mb-1 font-medium">Audit trail</p>
+                {run.reviews.map((r, i) => <p key={i} className="text-muted-foreground">{new Date(r.created_at).toLocaleString()} · {r.reviewer}: {r.action} → {r.final_decision}{r.note ? ` · “${r.note}”` : ""}</p>)}
+              </div>
+            )}
           </CardContent>
         </Card>
+        {!running && run?.review_status === "pending" && <HandoffCard h={run.handoff ?? null} />}
+        {!running && (run?.invoice?.payload?.extraction ? <ExtractionCard ex={run.invoice.payload.extraction} /> : run && (
+          <Card><CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />Document extraction</CardTitle>
+            <CardDescription>Structured input via {run.invoice.source} (fields arrived as data, so nothing had to be read from a document).</CardDescription></CardHeader></Card>
+        ))}
         <Card>
           <CardHeader><CardTitle>Invoice</CardTitle></CardHeader>
           <CardContent className="space-y-1 text-xs">
