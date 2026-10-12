@@ -63,8 +63,11 @@ flowchart LR
       RE[Rules engine: REJECT > HOLD > APPROVE + confidence gate]
       HO[Handoff builder: question, owner, next step, vendor email draft]
       SSE[Live stream: Server-Sent Events]
-      UI[Dashboard, live run view, review queue, impact card]
+      UI[Dashboard, live run view, review queue, Evidence panel, impact card]
+      JEV[Jev adapter: replay or live, PII redacted, gated, advisory only]
     end
+    SOR[(Systems of record: vendor master, POs, GRNs, contracts, GST registry, bank-change log, payments)]
+    TS[TypeSafe API: Jev]
     DB[(Database: SQLite locally, Postgres in prod)]
     U1 --> ING
     U2 --> ING
@@ -72,7 +75,10 @@ flowchart LR
     ING --> EXT --> ING
     ING --> DB
     ING --> Q --> W --> P --> RE --> HO
-    P -- every step --> DB
+    P -- every step + evidence --> DB
+    SOR --> P
+    P <-- typed question / probability --> JEV
+    JEV -. live mode only .-> TS
     DB --> SSE --> UI
     HO --> DB
     UI -- approve / reject + note --> DB
@@ -333,12 +339,12 @@ India-specific rules (rules-v2):
 flowchart TD
     S[Pipeline step needs a judgement] --> G0{JEV_MODE}
     G0 -- off --> R0[Rules only]
-    G0 -- replay --> RP[Recorded real Jev answer for this exact question\n deterministic stand-in if never recorded]
+    G0 -- replay --> RP[Recorded real Jev answer for this exact question<br/>deterministic stand-in if never recorded]
     G0 -- live --> RED[Redact PII: accounts, IFSC, PAN, e-mail, phone -> placeholders]
-    RED --> API[POST /v1/systemone\n state = invoice data as data\n question = fixed text written by us]
+    RED --> API[POST /v1/systemone<br/>state = invoice data as data<br/>question = fixed text written by us]
     API -->|error / timeout| R0
     API --> LOG
-    RP --> LOG[Log: question, options, answer, p, gate, latency, tokens, cost, model, mode\n-> evidence + model_calls + OTel span]
+    RP --> LOG[Log: question, options, answer, p, gate, latency, tokens, cost, model, mode<br/>-> evidence + model_calls + OTel span]
     LOG --> GATE{Probability above the calibrated gate?}
     GATE -- duplicate p >= 0.70 --> H[Add HOLD: possible duplicate, for a person]
     GATE -- PO choice p >= 0.80 and same answer with options reversed --> SG[Show suggested PO; invoice stays on HOLD]
