@@ -21,9 +21,29 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
       PGDATABASE: zamp_ps1
       PIPELINE_STEP_DELAY_MS: "350"
+      DB_MIGRATE: alembic          # versioned migrations on start (backend/migrations)
+      WORKER_MODE: external        # jobs run in the separate worker service below
+      LOG_FORMAT: json
+      JEV_MODE: ${JEV_MODE:-replay}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}   # only if JEV_MODE=live; read from your shell, never committed
     ports: ["8000:8000"]
     depends_on:
       db: { condition: service_healthy }
+
+  worker:                          # scale with: docker compose up --scale worker=3 (SKIP LOCKED + leases keep them apart)
+    build: .
+    command: ["python", "-m", "app.worker"]
+    environment:
+      PGHOST: db
+      PGUSER: zamp
+      PGPASSWORD: ${POSTGRES_PASSWORD:-local_dev_only}
+      PGDATABASE: zamp_ps1
+      PIPELINE_STEP_DELAY_MS: "350"
+      LOG_FORMAT: json
+      JEV_MODE: ${JEV_MODE:-replay}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+    depends_on:
+      app: { condition: service_started }
 
 volumes:
   pgdata:

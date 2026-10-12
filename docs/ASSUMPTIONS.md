@@ -10,6 +10,11 @@ The brief says: "treat ambiguity as part of the exercise. Make an assumption, no
 | A3 | Three-way match (invoice, PO, goods receipt) is the policy for PO-backed goods. | Standard AP control. | Services without GRNs would use two-way match plus requester confirmation. |
 | A4 | Price tolerance: +2% and at most 5,000 per line; cumulative PO +1%. Under-billing passes. | Common AP policy. | Per vendor / category settings. |
 | A5 | Approval matrix: above ₹5 lakh, a Finance Controller signs off even if everything matches. | Real companies have amount-based authority. | `APPROVAL_LIMIT_INR`. |
+| A7 | Systems of record are read as snapshots with an "as of" time (vendor master, PO register, GRNs, rate contracts, GST registry, bank-change log, payment history). | In production each is an ERP / GSTN / bank integration; snapshots make the demo reproducible and make staleness visible. | Live connectors. |
+| A8 | A vendor-master bank change younger than 30 days that was not verified by call-back holds the invoice, even if the invoice matches the master. | Fraudsters change the master first, then send a "matching" invoice. | `BANK_CHANGE_COOLDOWN_DAYS`. |
+| A9 | A PO edited after the invoice date holds the invoice. | The PO may have been changed to fit the bill. | Allow edits by named roles with a reason code. |
+| A10 | A PO price above the rate contract (beyond 2%) holds, even when the invoice matches the PO. | Two systems of record disagree; procurement decides which is right. | Per-category contract tolerance. |
+| A11 | The Jev model is advisory: it may add a hold or a suggestion, never approve. Gates (duplicate 0.70, PO 0.80, field 0.80) are set from our labelled sets. | A model's probability is a signal, not an authority; see docs/EVALS.md. | Re-tune on each customer's data and each pinned model version. |
 | A6 | FX rates (USD 84, EUR 92 to INR) are used **only** to apply the approval limit, never to compare invoice and PO amounts. | Comparing amounts across currencies needs an agreed rate, so a currency mismatch is held. | Daily rate feed. |
 
 ## The documents
@@ -28,6 +33,8 @@ The brief says: "treat ambiguity as part of the exercise. Make an assumption, no
 | B3 | Free, local OCR (tesseract) | Paid OCR APIs | Runs anywhere with no keys; swappable later. |
 | B4 | All data synthetic | Real invoices | The FAQ allows it; no customer data risk. |
 | B5 | One container (UI bundled into the API) | Two services | Free hosting with one service, no cross-origin issues. |
+| B6 | Jev (typed questions with probabilities) for judgement calls, replay mode by default | Chat LLM with free-text answers | We gate on a number; replay keeps the demo free and reproducible. |
+| B7 | Production features behind switches, all off by default | Always-on | The demo stays one free container; production turns them on. |
 
 ## Edge cases and why I picked them
 The brief asks for 2–4 non-trivial edge cases. I built many, and I lead with these four because each shows a different kind of judgment:

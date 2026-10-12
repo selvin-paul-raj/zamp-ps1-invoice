@@ -12,6 +12,8 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pytest -q
       - run: python -m evals.run_evals   # non-zero on any false approval (labelled or adversarial) or accuracy < 100% on the labelled set
+      - run: JEV_MODE=off python -m evals.run_evals --adv-repeats 0   # same result with the model switched off
+      - run: python -m evals.model_evals # Jev roles vs rules-only from recorded real answers (replay: no key, no network)
   frontend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: frontend } }
