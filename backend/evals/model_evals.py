@@ -381,7 +381,7 @@ def plot_svg(rel: dict, path: Path) -> None:
         out.append(f'<polyline points="{pts}" fill="none" stroke="{c}" stroke-width="1.6"/>')
         for b in bins_:
             out.append(f'<circle cx="{sx(b["mean_p"]):.1f}" cy="{sy(b["observed"]):.1f}" r="4" fill="{c}"/>'
-                       f'<text x="{sx(b["mean_p"]) + 6:.1f}" y="{sy(b["observed"]) + 12:.1f}" font-size="9" fill="{c}">n={b["n"]}</text>')
+                       f'<text x="{sx(b["mean_p"]) - 4:.1f}" y="{sy(b["observed"]) - 8:.1f}" font-size="9" fill="{c}">n={b["n"]}</text>')
         ly += 16
         out.append(f'<line x1="{L + 10}" y1="{ly}" x2="{L + 30}" y2="{ly}" stroke="{c}" stroke-width="2"/><text x="{L + 36}" y="{ly + 4}">{name}</text>')
     out.append("</svg>")

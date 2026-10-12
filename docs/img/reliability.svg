@@ -18,21 +18,21 @@
 <text x="14" y="200.0" text-anchor="middle" transform="rotate(-90 14 200.0)">Observed frequency (yes / correct)</text>
 <line x1="65" y1="42" x2="85" y2="42" stroke="#999" stroke-dasharray="5,4"/><text x="91" y="46">perfect calibration</text>
 <polyline points="119.7,350.0 143.2,350.0 184.7,350.0 222.1,350.0 264.4,350.0 287.9,350.0 339.9,350.0 390.7,48.9 413.1,39.6" fill="none" stroke="#c2410c" stroke-width="1.6"/>
-<circle cx="119.7" cy="350.0" r="4" fill="#c2410c"/><text x="125.7" y="362.0" font-size="9" fill="#c2410c">n=5</text>
-<circle cx="143.2" cy="350.0" r="4" fill="#c2410c"/><text x="149.2" y="362.0" font-size="9" fill="#c2410c">n=10</text>
-<circle cx="184.7" cy="350.0" r="4" fill="#c2410c"/><text x="190.7" y="362.0" font-size="9" fill="#c2410c">n=3</text>
-<circle cx="222.1" cy="350.0" r="4" fill="#c2410c"/><text x="228.1" y="362.0" font-size="9" fill="#c2410c">n=5</text>
-<circle cx="264.4" cy="350.0" r="4" fill="#c2410c"/><text x="270.4" y="362.0" font-size="9" fill="#c2410c">n=5</text>
-<circle cx="287.9" cy="350.0" r="4" fill="#c2410c"/><text x="293.9" y="362.0" font-size="9" fill="#c2410c">n=2</text>
-<circle cx="339.9" cy="350.0" r="4" fill="#c2410c"/><text x="345.9" y="362.0" font-size="9" fill="#c2410c">n=4</text>
-<circle cx="390.7" cy="48.9" r="4" fill="#c2410c"/><text x="396.7" y="60.9" font-size="9" fill="#c2410c">n=17</text>
-<circle cx="413.1" cy="39.6" r="4" fill="#c2410c"/><text x="419.1" y="51.6" font-size="9" fill="#c2410c">n=33</text>
+<circle cx="119.7" cy="350.0" r="4" fill="#c2410c"/><text x="115.7" y="342.0" font-size="9" fill="#c2410c">n=5</text>
+<circle cx="143.2" cy="350.0" r="4" fill="#c2410c"/><text x="139.2" y="342.0" font-size="9" fill="#c2410c">n=10</text>
+<circle cx="184.7" cy="350.0" r="4" fill="#c2410c"/><text x="180.7" y="342.0" font-size="9" fill="#c2410c">n=3</text>
+<circle cx="222.1" cy="350.0" r="4" fill="#c2410c"/><text x="218.1" y="342.0" font-size="9" fill="#c2410c">n=5</text>
+<circle cx="264.4" cy="350.0" r="4" fill="#c2410c"/><text x="260.4" y="342.0" font-size="9" fill="#c2410c">n=5</text>
+<circle cx="287.9" cy="350.0" r="4" fill="#c2410c"/><text x="283.9" y="342.0" font-size="9" fill="#c2410c">n=2</text>
+<circle cx="339.9" cy="350.0" r="4" fill="#c2410c"/><text x="335.9" y="342.0" font-size="9" fill="#c2410c">n=4</text>
+<circle cx="390.7" cy="48.9" r="4" fill="#c2410c"/><text x="386.7" y="40.9" font-size="9" fill="#c2410c">n=17</text>
+<circle cx="413.1" cy="39.6" r="4" fill="#c2410c"/><text x="409.1" y="31.6" font-size="9" fill="#c2410c">n=33</text>
 <line x1="65" y1="58" x2="85" y2="58" stroke="#c2410c" stroke-width="2"/><text x="91" y="62">duplicate (noul)</text>
 <polyline points="59.6,350.0 430.8,30.0" fill="none" stroke="#1d4ed8" stroke-width="1.6"/>
-<circle cx="59.6" cy="350.0" r="4" fill="#1d4ed8"/><text x="65.6" y="362.0" font-size="9" fill="#1d4ed8">n=24</text>
-<circle cx="430.8" cy="30.0" r="4" fill="#1d4ed8"/><text x="436.8" y="42.0" font-size="9" fill="#1d4ed8">n=48</text>
+<circle cx="59.6" cy="350.0" r="4" fill="#1d4ed8"/><text x="55.6" y="342.0" font-size="9" fill="#1d4ed8">n=24</text>
+<circle cx="430.8" cy="30.0" r="4" fill="#1d4ed8"/><text x="426.8" y="22.0" font-size="9" fill="#1d4ed8">n=48</text>
 <line x1="65" y1="74" x2="85" y2="74" stroke="#1d4ed8" stroke-width="2"/><text x="91" y="78">field support (noul)</text>
 <polyline points="433.8,30.0" fill="none" stroke="#15803d" stroke-width="1.6"/>
-<circle cx="433.8" cy="30.0" r="4" fill="#15803d"/><text x="439.8" y="42.0" font-size="9" fill="#15803d">n=12</text>
+<circle cx="433.8" cy="30.0" r="4" fill="#15803d"/><text x="429.8" y="22.0" font-size="9" fill="#15803d">n=12</text>
 <line x1="65" y1="90" x2="85" y2="90" stroke="#15803d" stroke-width="2"/><text x="91" y="94">PO choice (top prob.)</text>
 </svg>
