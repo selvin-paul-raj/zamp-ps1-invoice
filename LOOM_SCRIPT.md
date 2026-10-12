@@ -70,6 +70,8 @@ Repo: https://github.com/selvin-paul-raj/zamp-ps1-invoice
 ## 3:55 – 4:35 · How it's built, and how I know it works
 **Show:** README or the terminal with `python -m evals.run_evals` output.
 
+> "And it's all one command: `python -m evals.harness` runs every test, the labelled decisions, a red team of about 600 injection attacks and an LLM judge that I validated against human labels first, and the build fails if a single bad invoice would get paid."
+
 > "One design rule: AI reads, code decides, people own the exceptions. The decision is plain code, so it's auditable and an invoice can't talk it into paying. Testing: every labelled case is correct, 31 out of 31, 32 of 32 fields read right from four PDFs including a scanned one, and 600 broken variants of good invoices. Zero approved. It's built production-ready but switchable: database migrations, a durable queue with retries and a dead-letter queue, OpenTelemetry tracing including the model calls, API keys with roles, rate limiting, PII redaction before any model call. All off by default so the free demo stays simple."
 
 ## 4:35 – 4:50 · Close

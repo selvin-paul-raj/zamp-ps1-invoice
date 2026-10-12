@@ -9,11 +9,29 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt pytest
       - run: pytest -q
       - run: python -m evals.run_evals   # non-zero on any false approval (labelled or adversarial) or accuracy < 100% on the labelled set
       - run: JEV_MODE=off python -m evals.run_evals --adv-repeats 0   # same result with the model switched off
-      - run: python -m evals.model_evals # Jev roles vs rules-only from recorded real answers (replay: no key, no network)
+      - run: python -m evals.model_evals --out /tmp/model_eval_report.json # Jev roles vs rules-only from recorded real answers (replay: no key, no network)
+
+  # One command for everything (tests, decisions, PDFs, adversarial, Jev roles, LLM-as-judge + its validation, red team,
+  # robustness, cost) with the regression gate in backend/evals/gate.yaml. Offline replay: no secrets, no network, no cost.
+  harness:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    env: { JEV_MODE: replay, JUDGE_MODE: replay, JUDGE_BACKEND: jev }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr
+      - run: pip install -r requirements.txt pytest
+      - run: python -m evals.harness --out /tmp/harness   # exit 1 if any gate line fails
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: eval-scorecard, path: /tmp/harness }
+
   frontend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: frontend } }

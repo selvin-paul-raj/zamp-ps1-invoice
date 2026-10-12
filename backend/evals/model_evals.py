@@ -121,10 +121,15 @@ def eval_duplicates(assist: ModelAssist, settings) -> list[dict]:
         ctx2 = _ctx_for_pair(pair, settings)
         f: list = []
         assist.duplicate_check(ctx2, f)
-        call = next((c for c in ctx2.callbuf if c["role"] == "duplicate_judgement"), None)
+        dup = [c for c in ctx2.callbuf if c["role"] == "duplicate_judgement"]
+        call = dup[0] if dup else None
+        abl = next((c for c in dup if "without the vendor's notes" in c["question"]), None)
+        p_raw = call["probability"] if call else None
+        p_used = max(p_raw, abl["probability"]) if (abl and p_raw is not None and abl["probability"] is not None) else p_raw
         rows.append({"id": pair["id"], "kind": pair["kind"], "label": pair["label"], "rules_flag": rule_flag,
-                     "p": call["probability"] if call else None, "asked": call is not None,
-                     "latency_ms": call["latency_ms"] if call else None, "tokens": call["input_tokens"] if call else 0,
+                     "p": p_used, "p_with_notes": p_raw, "p_without_notes": abl["probability"] if abl else None, "asked": call is not None,
+                     "calls": len(dup),
+                     "latency_ms": call["latency_ms"] if call else None, "tokens": sum(c["input_tokens"] or 0 for c in dup),
                      "mode": call["mode"] if call else None, "model": call["model"] if call else None})
     return rows
 
@@ -457,7 +462,7 @@ def main() -> int:
     e_f, rel_f = ece([(r["p"], r["label"]) for r in fields])
     e_p, rel_p = ece([(r["p_top"], 1 if r["top"] == r["correct"] else 0) for r in labelled_po], bins=5)
     calls = [r for r in dup if r["asked"]] + po + list({(r["doc"], r["variant"]): r for r in fields}.values())
-    n_calls = sum(1 for r in dup if r["asked"]) + sum(r.get("n_calls", 1) for r in po) + len({(r["doc"], r["variant"]) for r in fields})
+    n_calls = sum(r.get("calls", 1) for r in dup if r["asked"]) + sum(r.get("n_calls", 1) for r in po) + len({(r["doc"], r["variant"]) for r in fields})
     lat = [r["latency_ms"] for r in calls if r.get("latency_ms")]
     toks = sum(r["tokens"] or 0 for r in dup + po + fields)
     models = sorted({r.get("model") for r in dup + po + fields if r.get("model")})
@@ -467,6 +472,10 @@ def main() -> int:
         "gates": {"duplicate_hold_p": gate_d, "po_min_p": gate_p, "field_min_p": gate_f},
         "duplicates": {"n": len(dup), "positives": sum(r["label"] for r in dup), "rules_only": binary_metrics(dup, "rules_flag"),
                        "jev_only": binary_metrics(dup, "jev_flag"), "rules_plus_jev": binary_metrics(dup, "combined_flag"),
+                       "jev_raw_with_notes": binary_metrics([{**r, "_raw": r.get("p_with_notes") is not None and r["p_with_notes"] >= gate_d} for r in dup], "_raw"),
+                       "ece_raw_with_notes": ece([(r.get("p_with_notes"), r["label"]) for r in dup])[0],
+                       "notes_ablation_raised_p": sum(1 for r in dup if r.get("p_without_notes") is not None and r["p_without_notes"] > (r.get("p_with_notes") or 0)),
+                       "notes_ablation_crossed_gate": sum(1 for r in dup if r.get("p_without_notes") is not None and r["p_without_notes"] >= gate_d > (r.get("p_with_notes") or 0)),
                        "gate_sweep_rules_plus_jev": sweep, "ece": e_d, "auc": auc([(r["p"], r["label"]) for r in dup]),
                        "jev_added_true_holds": sum(1 for r in dup if r["jev_flag"] and not r["rules_flag"] and r["label"] == 1),
                        "jev_added_false_holds": sum(1 for r in dup if r["jev_flag"] and not r["rules_flag"] and r["label"] == 0),

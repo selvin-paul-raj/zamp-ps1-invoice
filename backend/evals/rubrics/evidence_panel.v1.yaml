@@ -1,0 +1,15 @@
+id: evidence_panel
+version: 1
+artifact: The evidence panel for a decision. Each finding (reason) should cite the records from the systems of record that support it.
+judge: {backend: jev, model: jev-1.13.0}
+pass_threshold: 0.5
+graded_fields: [panel]
+criteria:
+  - id: every_finding_cited
+    question: "In `untrusted_output.panel`, does every finding have at least one cited evidence record that names a source system and a record?"
+    when_yes: "Every finding cites at least one record."
+    when_no: "At least one finding has no citation."
+  - id: citations_support
+    question: "In `untrusted_output.panel`, does the cited evidence for each finding actually show the problem the finding describes (the expected and actual values disagree in the way the finding says, from a sensible source system)?"
+    when_yes: "Each citation supports its finding."
+    when_no: "At least one finding lacks a citation that shows its problem, or a citation is from the wrong source, shows values that match, or does not relate to the finding."

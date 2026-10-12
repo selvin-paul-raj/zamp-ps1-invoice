@@ -22,6 +22,7 @@ from typing import Callable, Optional
 
 from .config import Settings, Tolerances
 from .evidence import Evidence, doc_ref_for
+from .guardrails import enforce_model_action_policy, scan_fields, validate_handoff
 from .safety import scan_injection
 from .decision import LLMAdapter, NullLLMAdapter, RulesDecisionEngine, handoff_for, template_explanation
 from .domain import (
@@ -136,6 +137,31 @@ def step_intake(ctx: Ctx) -> StepResult:
         ctx.ev("R-INTAKE-REQ", "invoice_doc", inv.invoice_number or None, k, "present", v, "missing" if k in missing else "match",
                doc_field=k, finding="MISSING_FIELD" if k in missing else None)
     hits = scan_injection(inv.notes or "") + [h for ln in inv.lines for h in scan_injection(ln.description or "")]
+    # Guardrails: every untrusted field, not only notes and descriptions (vendor name, numbers, SKUs, the full document
+    # text including hidden / white text and OCR text, PDF metadata, the upload file name, CSV cells).
+    um = inv.upload_meta or {}
+    meta_txt = " | ".join(f"{k}: {v}" for k, v in (um.get("pdf_metadata") or {}).items())
+    g_hits = scan_fields(
+        [("vendor_name", inv.vendor_name), ("invoice_number", inv.invoice_number), ("po_number", inv.po_number), ("notes", inv.notes),
+         ("filename", um.get("filename")), ("pdf_metadata", meta_txt)]
+        + [(f"line {ln.line_no or i + 1} sku", ln.sku) for i, ln in enumerate(inv.lines)]
+        + [(f"line {ln.line_no or i + 1} description", ln.description) for i, ln in enumerate(inv.lines)],
+        whole_documents=[("document_text", (inv.extraction or {}).get("text"))])
+    for h in g_hits:
+        if h["severity"] == "hold":
+            tag = f"{h['where']}: {h['category']}: {h['match']}"[:110]
+            if not any(h["match"] in x for x in hits):
+                hits.append(tag)
+    cues = [h for h in g_hits if h["severity"] == "info"]
+    if cues:
+        f.append(Finding("SOCIAL_ENGINEERING_CUES", "info", "Pressure language in the document (" + "; ".join(sorted({c["match"] for c in cues}))[:160]
+                         + "). Not a reason to hold on its own; the bank, limit and duplicate rules decide.", "intake", 0.5,
+                         {"cues": [c["match"] for c in cues][:5]}))
+    unsafe = [x for x in um.get("flags") or [] if x.startswith("pdf_active_content")]
+    if unsafe:
+        f.append(Finding("UNSAFE_DOCUMENT", "hold", f"The PDF contains active content ({', '.join(unsafe)}). It was not executed; a person checks the "
+                         "document's origin before anything is paid.", "intake", 0.9, {"flags": unsafe}))
+        ctx.ev("R-UPLOAD-SAFE", "invoice_doc", um.get("filename"), "pdf_active_content", "none", ", ".join(unsafe), "mismatch", finding="UNSAFE_DOCUMENT")
     if hits:
         f.append(Finding("SUSPICIOUS_INSTRUCTIONS", "hold",
                          "The document contains text that tries to instruct the system (e.g. 'ignore checks', 'pre-approved, pay now'). "
@@ -170,6 +196,8 @@ def step_intake(ctx: Ctx) -> StepResult:
         f.append(Finding("CREDIT_NOTE", "info", "Document is a credit note (money owed back to us), not a bill to pay. It follows the credit-note path.", "intake", 0.95))
     elif inv.doc_type not in ("invoice", "tax_invoice"):
         f.append(Finding("UNSUPPORTED_DOC_TYPE", "hold", f"Document type '{inv.doc_type}' is not an invoice (e.g. a quote or proforma); nothing should be paid on it.", "intake", 0.95))
+        ctx.ev("R-INTAKE-DOCTYPE", "invoice_doc", inv.invoice_number, "doc_type", "invoice / tax_invoice / credit_note", inv.doc_type, "mismatch",
+               doc_field="doc_type", finding="UNSUPPORTED_DOC_TYPE")
     blocking = [x for x in f if x.severity != "info"]
     status = "fail" if blocking else "pass"
     return StepResult(
@@ -189,6 +217,15 @@ def step_arithmetic(ctx: Ctx) -> StepResult:
     inv, tol = ctx.inv, ctx.tol
     f: list[Finding] = []
     slack = tol.rounding_per_line * max(1, len(inv.lines))
+    # A bill to pay never has negative lines or a negative total (a credit note is the only way to reduce what we owe).
+    # Found by the robustness evals: a negative quantity or a hidden negative "discount" line used to pass arithmetic.
+    if inv.doc_type != "credit_note":
+        neg = [f"line {ln.line_no or i}" for i, ln in enumerate(inv.lines, start=1) if ln.quantity < 0 or ln.unit_price < 0]
+        if neg or (inv.total is not None and inv.total < 0):
+            f.append(Finding("NEGATIVE_AMOUNT", "hold", f"Negative amount on a bill ({', '.join(neg) or 'total'}). Reductions must come as a credit "
+                             "note against the original invoice, not as negative lines.", "arithmetic", 0.97, {"lines": neg}))
+            ctx.ev("R-ARITH-NEGATIVE", "invoice_doc", inv.invoice_number, "quantity / unit_price / total", ">= 0", ", ".join(neg) or str(inv.total),
+                   "mismatch", finding="NEGATIVE_AMOUNT")
     computed_sub = Decimal("0")
     computed_tax = Decimal("0")
     for i, ln in enumerate(inv.lines, start=1):
@@ -296,6 +333,20 @@ def step_vendor(ctx: Ctx) -> StepResult:
                     {"invoice_account": mask_account(inv.bank_account), "master_account": mask_account(vendor.bank_account), "urgency_language": urgency},
                 )
             )
+        # Guardrail: the document TEXT asks to pay an account that is not the vendor master's (a BEC pattern even when the
+        # structured bank field still matches). Same control as a changed remit-to account: verify by phone before paying.
+        if not any(x.code == "BANK_DETAILS_CHANGED" for x in f) and vendor.bank_account:
+            master = vendor.bank_account.replace(" ", "")
+            texts = " ".join([inv.notes or "", inv.vendor_name or ""] + [f"{ln.sku or ''} {ln.description or ''}" for ln in inv.lines]
+                             + [(inv.extraction or {}).get("text") or ""])
+            other = sorted({m for m in re.findall(r"(?<![\w-])\d{9,18}(?![\w-])", texts) if m != master and m != (inv.bank_account or "").replace(" ", "")})
+            if other and re.search(r"\b(bank|account|a/c|remit|beneficiary|ifsc|pay)\b", texts, re.I):
+                f.append(Finding("BANK_DETAILS_CHANGED", "hold",
+                                 f"The document text gives another account ({', '.join(mask_account(o) for o in other[:2])}) than the vendor master "
+                                 f"({mask_account(vendor.bank_account)}). Verify out-of-band with the contact on file before paying (BEC control).",
+                                 "vendor_match", 0.99, {"text_accounts": [mask_account(o) for o in other[:3]], "master_account": mask_account(vendor.bank_account)}))
+                ctx.ev("R-BANK-TEXT", "vendor_master", vendor.id, "bank_account (document text)", mask_account(vendor.bank_account),
+                       ", ".join(mask_account(o) for o in other[:2]), "mismatch", doc_field="notes", finding="BANK_DETAILS_CHANGED")
     if vendor:
         _bank_evidence(ctx, vendor, f)
     summary = (
@@ -381,7 +432,8 @@ def step_po(ctx: Ctx) -> StepResult:
                     f.append(Finding("PO_SUGGESTED_BY_MODEL", "info",
                                      f"Model suggests {sug['po_number']} (probability {sug['probability']:.2f}). Advisory only: a person confirms the PO.",
                                      "po_lookup", round(sug["probability"], 3), sug))
-        ctx.ev("R-PO-INFER", "po_register", ", ".join(data["candidates"]) or None, "open POs covering the invoiced SKUs", "exactly 1",
+        ctx.ev("R-PO-INFER", "po_register", ", ".join(data["candidates"]) or f"open POs of {ctx.vendor.id if ctx.vendor else 'vendor'} (none fit)",
+               "open POs covering the invoiced SKUs", "exactly 1",
                len(cands), "match" if len(cands) == 1 else "mismatch", finding="PO_INFERRED" if len(cands) == 1 else "PO_MISSING")
     else:
         f.append(Finding("PO_MISSING", "hold", "Invoice has no PO reference and the vendor is unknown.", "po_lookup", 0.9))
@@ -608,14 +660,14 @@ def step_credit_note(ctx: Ctx) -> StepResult:
     if ref:
         norm = normalize_invoice_number(ref)
         match = next((p for p in ctx.md.priors if p.vendor_id == vid and normalize_invoice_number(p.invoice_number) == norm), None)
-    ctx.ev("R-CN-MATCH", "ap_ledger", match.ref if match else None, "reference_invoice", "a known invoice of this vendor", ref,
-           "match" if match else "missing", doc_field="reference_invoice")
     if match is None:
         f.append(Finding("CREDIT_NOTE_UNMATCHED", "hold", f"Credit note references {ref or 'no invoice'}, which is not among this vendor's known invoices. Find the original before applying it.", "credit_note", 0.9, {"reference": ref}))
     elif inv.total is not None and match.total and inv.total > match.total:
         f.append(Finding("CREDIT_EXCEEDS_INVOICE", "hold", f"Credit {money(inv.total)} is larger than the original invoice {match.invoice_number} ({money(match.total)}).", "credit_note", 0.95, {"reference": match.ref}))
     else:
         f.append(Finding("CREDIT_NOTE_TO_APPLY", "hold", f"Credit note for {inv.currency} {money(inv.total or Decimal('0'))} matches {match.invoice_number} ({match.status}). Apply it against the vendor's open payables; it is never paid out.", "credit_note", 0.9, {"reference": match.ref, "reference_status": match.status, "credit_amount": money(inv.total or Decimal('0'))}))
+    ctx.ev("R-CN-MATCH", "ap_ledger", match.ref if match else None, "reference_invoice", "a known invoice of this vendor", ref,
+           "match" if match else "missing", doc_field="reference_invoice", finding=f[0].code)
     return StepResult("credit_note", "Credit-note match", "warn", f[0].message, f, {"reference_invoice": ref, "matched": match.ref if match else None})
 
 
@@ -688,6 +740,7 @@ def run_pipeline(
             on_step(r)
 
     findings = [x for r in results for x in r.findings] + llm.extra_findings(inv)
+    dropped = enforce_model_action_policy(findings)  # action guardrail: a model may only add a hold / suggestion
     approve_conf = 1.0
     for r in results:
         approve_conf *= r.confidence
@@ -703,9 +756,10 @@ def run_pipeline(
     decide_step = StepResult(
         "decide", "Decision (rules engine)", {"APPROVE": "pass", "HOLD_FOR_REVIEW": "warn", "REJECT": "fail"}[decision.decision],
         f"{decision.decision} ({decision.confidence:.0%})" + (f" - {decision.primary_reason}" if decision.primary_reason else ""),
-        [], {**decision.to_dict(), "handoff": handoff_for(decision, inv), "info": [x.to_dict() for x in findings if x.severity == "info"],
+        [], {**decision.to_dict(), "handoff": handoff_for(decision, inv, evidence=all_ev), "info": [x.to_dict() for x in findings if x.severity == "info"],
              "cited_evidence": cited, "checks_matched_by_source": matched, "evidence_count": len(all_ev),
-             "decided_by": "rules engine (deterministic)", "models_used": sorted({c["provider"] + ":" + c["role"] for r in results for c in r.model_calls})},
+             "decided_by": "rules engine (deterministic)", "model_findings_dropped_by_policy": dropped,
+             "handoff_check": validate_handoff(handoff_for(decision, inv, evidence=all_ev)), "models_used": sorted({c["provider"] + ":" + c["role"] for r in results for c in r.model_calls})},
     )
     results.append(decide_step)
     if on_step:

@@ -25,7 +25,8 @@ SEED = Path(__file__).resolve().parent.parent / "seed"
 LABELS = ["APPROVE", "HOLD_FOR_REVIEW", "REJECT"]
 
 
-def evaluate() -> dict:
+def evaluate(keep_runs: bool = False) -> dict:
+    runs = {}
     tmp = tempfile.mkdtemp()
     svc = Service(make_engine(f"sqlite:///{tmp}/eval.db"), Settings())
     svc.load_master(SEED)
@@ -35,6 +36,7 @@ def evaluate() -> dict:
         res = svc.ingest(it, idempotency_key=f"seed:{it['id']}", expected=it["expected"])
         svc.drain(delay_ms=0)
         run = svc.get_run(res["run_id"])
+        runs[it["id"]] = run
         codes = [r["code"] for r in run["reasons"]]
         exp = it["expected"]
         rows.append({
@@ -59,6 +61,7 @@ def evaluate() -> dict:
         res = svc.ingest(payload, idempotency_key=f"pdf:{name}", expected={k: v for k, v in exp.items() if k != "fields"})
         svc.drain(delay_ms=0)
         run = svc.get_run(res["run_id"])
+        runs[name.split("_")[0]] = run
         codes = [r["code"] for r in run["reasons"]]
         rows.append({
             "id": name.split("_")[0], "expected": exp["decision"], "got": run["decision"], "expected_reason": exp["reason"],
@@ -74,7 +77,7 @@ def evaluate() -> dict:
     n = len(rows)
     cm = Counter((r["expected"], r["got"]) for r in rows)
     auto = [r for r in rows if r["got"] == "APPROVE"]
-    return {
+    out = {
         "n": n,
         "decision_accuracy": sum(r["decision_ok"] for r in rows) / n,
         "primary_reason_accuracy": sum(r["reason_ok"] for r in rows) / n,
@@ -88,6 +91,9 @@ def evaluate() -> dict:
         "pdf_fields": [field_hits, field_total],
         "rows": rows,
     }
+    if keep_runs:
+        out["_runs"] = runs
+    return out
 
 
 def main() -> int:

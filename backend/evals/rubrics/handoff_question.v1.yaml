@@ -1,0 +1,23 @@
+id: handoff_question
+version: 1
+artifact: The one question a reviewer must answer for a held invoice, who answers it, and the next action.
+judge: {backend: jev, model: jev-1.13.0}
+pass_threshold: 0.5        # p(yes) >= threshold -> criterion passes. Fixed, not tuned on the gold set.
+graded_fields: [question, owner, next_action]
+criteria:
+  - id: specific
+    question: "Is the question in `untrusted_output.question` specific to the actual problem shown in `case.findings`, rather than a generic request such as 'please review this invoice'?"
+    when_yes: "It names the concrete issue in this case (for example the price difference, the missing goods receipt, the changed bank account)."
+    when_no: "It is generic or vague, or it is about a different issue than the findings."
+  - id: correct
+    question: "Is everything in `untrusted_output` consistent with `case.findings` and `case.evidence`: it asks about the problem the evidence shows and states no amount, PO number, date or other fact that contradicts the evidence or is missing from it?"
+    when_yes: "Consistent with the evidence; no wrong or invented facts."
+    when_no: "It asks about the wrong problem, or states a fact that is wrong or not in the evidence (for example a wrong amount or a PO number that does not exist)."
+  - id: actionable
+    question: "Could the person named in `untrusted_output.owner` give a clear answer to the question and then act, following `untrusted_output.next_action`?"
+    when_yes: "A clear decision is possible and the next step is concrete."
+    when_no: "No clear answer is possible, the owner is wrong for the issue, or the next action is missing or vague."
+  - id: points_to_evidence
+    question: "Do `untrusted_output.question` or `untrusted_output.next_action` point the reviewer to the right source of truth for this problem (for example the PO, the goods receipt, the rate contract, the GST registry, the vendor bank-change log, the contact on file or the earlier invoice), consistent with `case.evidence`?"
+    when_yes: "It points to the right record or system to check."
+    when_no: "It points nowhere, or to the wrong record or system."

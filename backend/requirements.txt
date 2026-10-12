@@ -11,3 +11,4 @@ opentelemetry-api>=1.25   # tracing API (no-op unless OTEL_ENABLED=1)
 opentelemetry-sdk>=1.25
 # Optional, to send traces to an OTLP backend (Jaeger, Tempo, Honeycomb, Langfuse):
 #   pip install opentelemetry-exporter-otlp-proto-http
+pyyaml>=6.0            # eval rubrics and the regression gate (evals/)

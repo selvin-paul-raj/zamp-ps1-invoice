@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -30,6 +31,7 @@ from typing import Any, Callable, Optional
 from .config import Settings, jev_api_key
 from .domain import Finding, PriorInvoice, PurchaseOrder, invoice_number_core, money
 from .evidence import now_iso
+from .guardrails import ALLOWED_MODEL_ROLES, validate_model_response
 from .safety import Redactor, as_data
 from .telemetry import span
 
@@ -174,6 +176,8 @@ class ModelAssist:
 
     # ---- core call
     def _call(self, ctx, role: str, state: Any, questions: dict[str, Any], fake: Callable[[], dict[str, Any]]) -> tuple[Optional[dict], dict]:
+        if role not in ALLOWED_MODEL_ROLES:  # action guardrail: only allow-listed model calls exist
+            raise JevError(f"model role {role!r} is not allow-listed")
         h = request_hash(state, questions)
         meta = {"mode": self.mode, "model": None, "latency_ms": 0, "input_tokens": 0, "cost_usd": 0.0, "request_hash": h[:16], "error": None}
         resp = None
@@ -195,9 +199,24 @@ class ModelAssist:
                     resp = rec["response"]
                     meta["mode"] = "replay"
                     meta["latency_ms"] = rec.get("latency_ms", 0)
+                elif os.environ.get("JEV_FILL_MISSING") == "1" and jev_api_key():
+                    # replay, but record the few questions never asked before (keeps every existing recording untouched)
+                    try:
+                        resp = self.client.ask(state, questions)
+                        meta["latency_ms"] = int((time.perf_counter() - t0) * 1000)
+                        meta["mode"] = "live"
+                        self.store.put(h, {"response": resp, "latency_ms": meta["latency_ms"], "recorded_at": now_iso(), "role": role})
+                    except JevError as exc:
+                        meta["error"] = str(exc)
                 else:
                     resp = {"model": "fake-deterministic", "answers": fake(), "usage": {"input_tokens": 0, "output_tokens": 0}}
                     meta["mode"] = "fake"
+            if resp is not None:
+                bad = validate_model_response(resp, questions)  # output guardrail: typed answers only, else discarded
+                if bad:
+                    meta["error"] = f"invalid model response discarded: {bad}"
+                    log.warning("jev %s: %s (no action; rules decide)", role, bad)
+                    resp = None
             if resp:
                 meta["model"] = resp.get("model")
                 meta["input_tokens"] = int((resp.get("usage") or {}).get("input_tokens") or 0)
@@ -255,6 +274,17 @@ class ModelAssist:
                 self._log(ctx, "duplicate_judgement", "noul", self.DUP_Q["instructions"], None, None, None, None, gate, "error_no_action", meta, p.ref)
                 continue
             prob = float(resp["answers"]["is_duplicate"]["noul"])
+            # Guardrail found by the red team: the vendor's free-text notes ("separate trips, second week") talked Jev below the
+            # gate and a disguised re-submission was paid. Untrusted text may RAISE suspicion, never lower it: when the invoice
+            # carries notes, ask again without them and keep the higher probability.
+            p_raw, ablation = prob, None
+            if state["new_invoice"].get("notes"):
+                st2 = {"new_invoice": {**state["new_invoice"], "notes": None}, "earlier_invoice": state["earlier_invoice"]}
+                resp2, meta2 = self._call(ctx, "duplicate_judgement", st2, qs, lambda: {"is_duplicate": {"type": "noul", "noul": _fake_dup(st2)}})
+                if resp2:
+                    p2 = float(resp2["answers"]["is_duplicate"]["noul"])
+                    ablation = (p2, meta2)
+                    prob = max(prob, p2)
             if p.ref in flagged:
                 outcome = "agrees_with_rule" if prob >= gate else "rule_hold_kept"
                 for x in f:
@@ -270,8 +300,13 @@ class ModelAssist:
                                                                           "model_probability": prob, "model": meta["model"]}))
             else:
                 outcome = "no_action"
-            self._log(ctx, "duplicate_judgement", "noul", self.DUP_Q["instructions"], None, "yes" if prob >= 0.5 else "no", prob, abs(2 * prob - 1),
+            self._log(ctx, "duplicate_judgement", "noul", self.DUP_Q["instructions"], None, "yes" if p_raw >= 0.5 else "no", p_raw, abs(2 * p_raw - 1),
                       gate, outcome, meta, f"{p.invoice_number}", "POSSIBLE_DUPLICATE" if outcome == "hold_added" else None)
+            if ablation:
+                p2, meta2 = ablation
+                self._log(ctx, "duplicate_judgement", "noul", self.DUP_Q["instructions"] + " [asked again without the vendor's notes]", None,
+                          "yes" if p2 >= 0.5 else "no", p2, abs(2 * p2 - 1), gate,
+                          f"notes_ablation ({'used: raised p' if p2 > p_raw else 'not used'}; p used {prob:.2f})", meta2, f"{p.invoice_number}")
 
     # ---- role 2: choose between candidate POs (choice)
     PO_INSTR = ("Which purchase order does this invoice bill against? Use the items, descriptions, delivery location, "

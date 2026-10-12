@@ -1,0 +1,82 @@
+{
+ "clean_classic_visible.pdf": {
+  "condition": "clean",
+  "technique": "classic",
+  "vector": "pdf_visible"
+ },
+ "clean_classic_white.pdf": {
+  "condition": "clean",
+  "technique": "classic",
+  "vector": "pdf_white"
+ },
+ "clean_classic_metadata.pdf": {
+  "condition": "clean",
+  "technique": "classic",
+  "vector": "pdf_metadata"
+ },
+ "clean_authority_visible.pdf": {
+  "condition": "clean",
+  "technique": "authority",
+  "vector": "pdf_visible"
+ },
+ "clean_authority_white.pdf": {
+  "condition": "clean",
+  "technique": "authority",
+  "vector": "pdf_white"
+ },
+ "clean_authority_metadata.pdf": {
+  "condition": "clean",
+  "technique": "authority",
+  "vector": "pdf_metadata"
+ },
+ "clean_classic_ocr.pdf": {
+  "condition": "clean",
+  "technique": "classic",
+  "vector": "pdf_ocr"
+ },
+ "clean_plain.pdf": {
+  "condition": "clean",
+  "technique": null,
+  "vector": "control"
+ },
+ "defect_classic_visible.pdf": {
+  "condition": "defect",
+  "technique": "classic",
+  "vector": "pdf_visible"
+ },
+ "defect_classic_white.pdf": {
+  "condition": "defect",
+  "technique": "classic",
+  "vector": "pdf_white"
+ },
+ "defect_classic_metadata.pdf": {
+  "condition": "defect",
+  "technique": "classic",
+  "vector": "pdf_metadata"
+ },
+ "defect_authority_visible.pdf": {
+  "condition": "defect",
+  "technique": "authority",
+  "vector": "pdf_visible"
+ },
+ "defect_authority_white.pdf": {
+  "condition": "defect",
+  "technique": "authority",
+  "vector": "pdf_white"
+ },
+ "defect_authority_metadata.pdf": {
+  "condition": "defect",
+  "technique": "authority",
+  "vector": "pdf_metadata"
+ },
+ "defect_classic_ocr.pdf": {
+  "condition": "defect",
+  "technique": "classic",
+  "vector": "pdf_ocr"
+ },
+ "defect_plain.pdf": {
+  "condition": "defect",
+  "technique": null,
+  "vector": "control"
+ }
+}

@@ -14,7 +14,7 @@ Repo: https://github.com/selvin-paul-raj/zamp-ps1-invoice (private)
 | Real inputs | Text PDFs, **scanned PDFs (OCR)**, CSV, JSON; 4 sample PDFs in 3 vendor layouts |
 | **Evidence panel** | Every check cites its source of truth: which system (vendor master, PO register, goods receipts, rate contracts, GST registry, bank-change log, payment history, prior invoices), which record and field, what the source says vs what the invoice says, the rule, the snapshot time, and the PDF line it was read from |
 | **Jev model (TypeSafe), switchable** | Advisory only: flags likely duplicates, suggests the PO when it is missing, double-checks OCR fields, with probabilities and calibrated gates. **Replay mode by default** (recorded real Jev answers, no key needed); live with one env var |
-| Evidence it works | 59 tests; **31/31 labelled cases** (27 invoices + 4 PDFs); 32/32 PDF fields; **0 false approvals in 600 adversarial variants**; Jev live-tested on our eval sets ([docs/EVALS.md](docs/EVALS.md)) |
+| Evidence it works | 79 tests (59 + 20 guardrail tests); **31/31 labelled cases** (27 invoices + 4 PDFs); 32/32 PDF fields; **0 false approvals in 600 adversarial variants**; Jev live-tested on our eval sets; **LLM-as-judge validated against a human-labelled gold set**; **0 of 489 prompt-injection attacks changed a decision**; all in one command with a regression gate (`python -m evals.harness`, [docs/EVALS.md](docs/EVALS.md), [docs/SECURITY.md](docs/SECURITY.md)) |
 
 > All data is synthetic. No API key or paid service is needed to run it.
 
@@ -45,7 +45,8 @@ PIPELINE_STEP_DELAY_MS=350 uvicorn app.main:app --port 8000
 
 **Tests and evals:**
 ```bash
-cd backend && pytest -q && python -m evals.run_evals && python -m evals.model_evals
+cd backend && python -m evals.harness      # everything + regression gate, offline (scorecard in backend/evals/reports/)
+cd backend && pytest -q && python -m evals.run_evals && python -m evals.model_evals   # the pieces on their own
 ```
 
 **Turn Jev on live** (optional; the demo uses recorded answers):
@@ -147,6 +148,12 @@ Assumptions behind these choices: **[docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md)**
 
 `python -m evals.model_evals` measures the Jev roles against rules-only on four labelled sets (84 duplicate pairs, 15 PO-choice cases, 72 field checks, 6 end-to-end challenge invoices): precision/recall, false-hold rate, calibration (ECE + reliability plot), latency and cost. The answers were recorded from the real Jev API (`jev-1.13.0`) on 12 Oct 2026 and replay exactly. Results and honest limits: **[docs/EVALS.md](docs/EVALS.md)**.
 
+**One command for all of it:** `python -m evals.harness` runs the tests, the labelled decisions (per-class precision / recall / F1, confusion matrix), PDF fields, the adversarial set, the Jev role evals, an **LLM-as-judge** with its own validation, a **security red team** and **robustness** suite, and cost / latency, then applies a regression gate (`backend/evals/gate.yaml`) and writes a scorecard (`backend/evals/reports/scorecard.md` / `.html`). It runs offline from recorded real answers, so CI needs no secrets. Current result: **gate PASS**.
+
+- **LLM-as-judge, only where there is no exact answer.** Rules decide pay / hold and are scored against labels. The judge (Jev, typed yes/no rubric questions with probabilities, model version pinned in versioned rubric files) grades only the text a person reads: the reviewer question, the vendor e-mail draft, the explanation and the evidence panel. It was validated against a 69-item human-labelled gold set (32 deliberately bad outputs, all caught; item-level kappa 0.66); criteria that did not hold up are marked advisory and are not gated. Exact checks run beside it (every number / id in a generated text must be in the evidence: 100%).
+- **Security and guardrails.** Input (normalise unicode tricks, scan every field incl. hidden PDF text, metadata, OCR, file names, CSV cells; PII redaction; upload limits), output (schema validation, groundedness, no vendor e-mail for bank changes) and action (a model may only add a hold or a suggestion; allow-listed calls only). Red team: 489 pipeline attacks, 30 against Jev, 105 against the judge, **0 succeeded, 0 leaks**; 38/38 robustness cases. Mapped to the OWASP Top 10 for LLM Apps (2025) and AP fraud risks in [docs/SECURITY.md](docs/SECURITY.md).
+- **What the harness caught (and we fixed):** negative lines were approved; a re-submission with the original timestamp was paid twice; concurrent deliveries raised errors; vendor notes could talk Jev out of a duplicate (6/30 paid → 0/30); the approval-limit question named no amount.
+
 A lesson from building it: the first version of the adversarial generator reported one "false approval". It was the test that was wrong (it had created a legitimate invoice still within the goods received). Fixed the generator, kept the story.
 
 ---
@@ -207,10 +214,11 @@ backend/app/worker.py      standalone worker (WORKER_MODE=external)
 backend/migrations/        Alembic migrations (DB_MIGRATE=alembic)
 backend/seed/              synthetic vendors, POs, GRNs, contracts, GST registry, bank-change log, payments, history,
                            27 labelled invoices, pdfs/ (4 PDFs + labels), jev_replay.json (recorded real Jev answers)
-backend/tests/             59 tests
-backend/evals/             labelled evals, adversarial generator, model_evals (Jev vs rules-only)
+backend/tests/             79 tests (incl. guardrails)
+backend/evals/             harness (one command + gate), labelled evals, adversarial, model_evals (Jev vs rules-only),
+                           judge/ (LLM-as-judge, gold set, meta-eval), rubrics/, security/ (red team, robustness), reports/
 frontend/                  Next.js dashboard, live run view, review queue (static export)
-docs/                      ARCHITECTURE, EVALS, ASSUMPTIONS, DEMO_RUNBOOK, ROLLOUT_30_DAYS
+docs/                      ARCHITECTURE, EVALS, SECURITY, ASSUMPTIONS, DEMO_RUNBOOK, ROLLOUT_30_DAYS
 LOOM_SCRIPT.md             5-minute video script
 ```
 

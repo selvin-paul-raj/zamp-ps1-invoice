@@ -17,6 +17,8 @@ import json
 import re
 from typing import Any
 
+from .guardrails import check_upload, neutralise_cell  # noqa: E402
+
 HEADER_FIELDS = ["invoice_number", "vendor_name", "vendor_tax_id", "invoice_date", "currency", "po_number", "bank_account", "notes", "subtotal", "tax_total", "total"]
 LINE_FIELDS = ["line_no", "sku", "description", "quantity", "unit_price", "tax_rate", "amount", "tax_amount"]
 
@@ -30,7 +32,8 @@ def parse_csv(data: bytes) -> list[dict[str, Any]]:
     reader = csv.DictReader(io.StringIO(data.decode("utf-8-sig")))
     grouped: dict[str, dict[str, Any]] = {}
     for row in reader:
-        row = {k.strip(): (v or "").strip() for k, v in row.items() if k}
+        # CSV / formula injection: cells that would run as formulas in Excel or Sheets are stored with a leading apostrophe
+        row = {k.strip(): neutralise_cell((v or "").strip()) for k, v in row.items() if k}
         key = row.get("invoice_number") or f"row{len(grouped)}"
         inv = grouped.setdefault(key, {**{f: row.get(f) or None for f in HEADER_FIELDS}, "lines": [], "source": "csv"})
         inv["lines"].append({f: row.get(f) or None for f in LINE_FIELDS})
@@ -294,8 +297,17 @@ def parse_pdf(data: bytes) -> list[dict[str, Any]]:
     return [out]
 
 
-def parse_upload(filename: str, data: bytes) -> list[dict[str, Any]]:
-    name = (filename or "").lower()
+def _pdf_metadata(data: bytes) -> dict[str, str]:
+    try:
+        from pypdf import PdfReader
+
+        md = PdfReader(io.BytesIO(data)).metadata or {}
+        return {str(k).lstrip("/"): str(v)[:500] for k, v in md.items()}
+    except Exception:  # noqa: BLE001 - metadata is optional
+        return {}
+
+
+def _parse(name: str, data: bytes) -> list[dict[str, Any]]:
     if name.endswith(".json"):
         return parse_json(data)
     if name.endswith(".csv"):
@@ -305,3 +317,18 @@ def parse_upload(filename: str, data: bytes) -> list[dict[str, Any]]:
     if name.endswith(".txt"):
         return [parse_document_text(data.decode("utf-8", "ignore"), method="text")]
     raise ValueError("Unsupported file type; use .json, .csv, .pdf or .txt")
+
+
+def parse_upload(filename: str, data: bytes) -> list[dict[str, Any]]:
+    """Upload guardrails first (type by extension and signature, size, page count, encrypted / active-content PDFs), then parse.
+    The file name and PDF metadata travel with the payload so the intake scan checks them like any other untrusted text."""
+    facts = check_upload(filename, data)
+    name = (filename or "").lower()
+    out = _parse(name, data)
+    meta = {"filename": filename, "bytes": facts.get("bytes"), "pages": facts.get("pages"), "flags": facts.get("flags") or []}
+    if name.endswith(".pdf"):
+        meta["pdf_metadata"] = _pdf_metadata(data)
+    for p in out:
+        if isinstance(p, dict):
+            p["upload_meta"] = meta
+    return out

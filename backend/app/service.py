@@ -11,8 +11,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Optional
 
-from sqlalchemy import and_, delete, desc, func, insert, select, update
+from sqlalchemy import or_, and_, delete, desc, func, insert, select, update
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 
 from . import db
 from .config import Settings
@@ -84,7 +85,7 @@ class Service:
             for t in (db.run_events, db.reviews, db.jobs, db.runs, db.invoices, db.evidence, db.model_calls):
                 c.execute(delete(t))
 
-    def master_data(self, exclude_invoice_id: Optional[str], before: Optional[str]) -> MasterData:
+    def master_data(self, exclude_invoice_id: Optional[str], before: Optional[str], created_before: Optional[str] = None) -> MasterData:
         with self.engine.connect() as c:
             vendors = {
                 r.id: Vendor(r.id, r.name, r.tax_id, r.currency, r.bank_account, r.status, db.loads(r.aliases, []))
@@ -115,7 +116,13 @@ class Service:
             # Earlier invoices processed by this system count as "known" (latest run, effective decision).
             q = select(db.invoices)
             if before:
-                q = q.where(db.invoices.c.received_at < before)
+                # "Known before this one": received earlier per the document, OR already in this system earlier. The second
+                # condition closes a gap the robustness evals found: received_at comes from the client, so a re-submission
+                # carrying the original (or an earlier) received_at would otherwise not see the original and could be paid twice.
+                cond = db.invoices.c.received_at < before
+                if created_before:
+                    cond = or_(cond, db.invoices.c.created_at < created_before)
+                q = q.where(cond)
             for inv_row in c.execute(q):
                 if inv_row.id == exclude_invoice_id:
                     continue
@@ -154,6 +161,18 @@ class Service:
         payload = {k: v for k, v in payload.items() if k not in ("expected", "id")}
         inv = Invoice.from_payload(payload)  # validates numbers / dates
         key = (idempotency_key or canonical_hash(payload))[:64]
+        try:
+            return self._ingest_once(payload, inv, key, expected, auto_run)
+        except IntegrityError:
+            # Two deliveries with the same key raced (found by the robustness evals): the loser returns the winner's invoice.
+            with self.engine.connect() as c:
+                existing = c.execute(select(db.invoices).where(db.invoices.c.ingest_key == key)).first()
+                run = c.execute(select(db.runs).where(db.runs.c.invoice_id == existing.id).order_by(desc(db.runs.c.created_at)).limit(1)).first() if existing else None
+            if existing is None:
+                raise
+            return {"invoice_id": existing.id, "run_id": run.id if run else None, "created": False}
+
+    def _ingest_once(self, payload: dict[str, Any], inv: Invoice, key: str, expected: Optional[dict], auto_run: bool) -> dict[str, Any]:
         with self.engine.begin() as c:
             existing = c.execute(select(db.invoices).where(db.invoices.c.ingest_key == key)).first()
             if existing:
@@ -221,7 +240,7 @@ class Service:
             delay = min(delay, 0.04)  # bulk demo seed: fast enough to fill the dashboard in ~10 s, still visibly live
         t0 = time.perf_counter()
         inv = Invoice.from_payload(db.loads(inv_row.payload))
-        md = self.master_data(exclude_invoice_id=inv_row.id, before=inv_row.received_at)
+        md = self.master_data(exclude_invoice_id=inv_row.id, before=inv_row.received_at, created_before=inv_row.created_at)
         self.emit(run_id, "start", "info", "Run started", f"Attempt {attempt}: {inv.vendor_name} {inv.invoice_number}", {"invoice_id": inv_row.id}, attempt)
 
         def on_step(r: StepResult) -> None:
@@ -403,6 +422,9 @@ class Service:
         d["events"] = [self._event_dict(e) for e in evs]
         d["reviews"] = [{"action": x.action, "final_decision": x.final_decision, "reviewer": x.reviewer, "note": x.note, "created_at": x.created_at} for x in revs]
         d.update(self.evidence_for(run_id))
+        if d.get("handoff") and d.get("evidence"):  # add the "evidence to open" pointer from the stored evidence records
+            fs = [Finding(**{k: x.get(k) for k in ("code", "severity", "message", "step", "certainty", "evidence") if k in x}) for x in d["reasons"]]
+            d["handoff"] = handoff_for(Decision(r.decision, r.confidence or 0, fs, r.primary_reason), None, i.vendor_name, i.invoice_number, evidence=d["evidence"])
         return d
 
     def evidence_for(self, run_id: str) -> dict[str, Any]:

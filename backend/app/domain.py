@@ -128,6 +128,7 @@ class Invoice:
     reference_invoice: Optional[str] = None  # for credit notes: the invoice being credited
     gst_type: Optional[str] = None  # IGST (inter-state) | CGST_SGST (intra-state) | None (not stated / non-GST)
     extraction: dict[str, Any] = field(default_factory=dict)  # per-field confidence etc. from document parsing
+    upload_meta: dict[str, Any] = field(default_factory=dict)  # upload facts: file name, PDF metadata, guardrail flags
 
     @staticmethod
     def from_payload(p: dict[str, Any]) -> "Invoice":
@@ -171,6 +172,7 @@ class Invoice:
             reference_invoice=(str(p["reference_invoice"]).strip() or None) if p.get("reference_invoice") else None,
             gst_type=_norm_gst_type(p.get("gst_type")),
             extraction=p.get("extraction") or {},
+            upload_meta=p.get("upload_meta") or {},
         )
 
     def fingerprint(self) -> str:

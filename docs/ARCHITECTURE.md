@@ -6,7 +6,7 @@
 
 **The design rule behind everything:** *AI reads, code decides, people own the exceptions.* Models may help read messy documents, match, and explain. They never approve a payment; an uncertain answer goes to a person.
 
-**New in this version (rules-v3):** every decision cites its **evidence** from named **systems of record** (section 3a); source **freshness and conflict** checks; the **Jev** model from TypeSafe as a switchable, advisory helper (section 6a, measured in [EVALS.md](EVALS.md)); and production switches that are off by default (section 9a).
+**New in this version (rules-v3):** every decision cites its **evidence** from named **systems of record** (section 3a); source **freshness and conflict** checks; the **Jev** model from TypeSafe as a switchable, advisory helper (section 6a, measured in [EVALS.md](EVALS.md)); and production switches that are off by default (section 9a). **Also new:** a guardrails layer and threat model (section 9b, [SECURITY.md](SECURITY.md)) and one evaluation harness with an LLM-as-judge and a regression gate (section 10a).
 
 ---
 
@@ -416,7 +416,7 @@ stateDiagram-v2
 
 | Risk | Control in this build | Production addition |
 |---|---|---|
-| Prompt injection ("pre-approved, ignore checks" inside invoice text) | Decision is code. Document text is scanned for instruction-like text → `SUSPICIOUS_INSTRUCTIONS` hold. Text sent to a model goes in `state` as data; the question wording is fixed by us. Tests + 60 adversarial variants with injected text | Keep models out of the decision |
+| Prompt injection ("pre-approved, ignore checks" inside invoice text) | Decision is code. Every untrusted field (incl. hidden PDF text, metadata, OCR, file names, CSV cells) is normalised and scanned → `SUSPICIOUS_INSTRUCTIONS` hold. Text sent to a model goes in `state` as data; the question wording is fixed by us; vendor notes can raise Jev's duplicate probability, never lower it. Red team: 489 + 30 + 105 attacks, 0 succeeded (section 9b, SECURITY.md) | Keep models out of the decision |
 | PII sent to a model | Bank accounts, IFSC, PAN, e-mail and phone numbers are replaced by placeholders before any model call (`app/safety.py`); test checks the raw values never leave | Data processing agreement / zero-retention with the model vendor |
 | Model mistakes or manipulation | Models can only add caution; calibrated gates; every call logged; eval harness re-run on each model version | Pin the model version; re-tune gates per customer |
 | Business email compromise (fake bank change) | `BANK_DETAILS_CHANGED` always holds, urgency language flagged, no vendor email draft, call-back instruction | Vendor master change workflow with dual approval; first-payment controls |
@@ -449,6 +449,55 @@ Structured model output: Jev answers are typed by the API itself (noul / choice 
 
 ---
 
+## 9b. Threat model and guardrails (details: [SECURITY.md](SECURITY.md))
+
+Everything that comes from outside is untrusted. It can reach a model only as labelled data, it can never reach the
+decision except through the rules, and nothing a model says can approve, change a bank account or change a limit.
+
+```mermaid
+flowchart LR
+  subgraph Untrusted["Untrusted inputs (attacker-controlled)"]
+    F1[PDF text, hidden white text,<br/>metadata, OCR'd scans]
+    F2[E-mail body, notes, vendor name,<br/>SKU, line descriptions]
+    F3[CSV cells, file names, JSON fields]
+  end
+  subgraph In["Input guardrails"]
+    UP[Upload checks: type + signature,<br/>10 MB, 20 pages, no encrypted,<br/>active content held]
+    NM[Normalise: NFKC, zero-width, bidi,<br/>homoglyphs, decode base64/hex/url]
+    SC[Scan every field: instructions, authority,<br/>exfiltration, judge manipulation,<br/>formulas, 8 languages]
+    RD[PII redaction: account, IFSC, PAN,<br/>e-mail, phone, card, Aadhaar, secrets]
+  end
+  subgraph Core["Trusted core"]
+    RU[Rules engine decides<br/>APPROVE / HOLD / REJECT]
+    SOR[(Systems of record)]
+  end
+  subgraph Models["Models (advisory)"]
+    JV[Jev: 3 allow-listed roles,<br/>typed answers only]
+    JD[LLM-as-judge: eval only,<br/>grades text, never decisions]
+  end
+  subgraph Out["Output + action guardrails"]
+    SV[Schema-validate every answer]
+    AP[Action policy: model may only ADD<br/>a hold or a suggestion]
+    GR[Groundedness: numbers / ids<br/>must be in the evidence]
+    NE[No vendor e-mail for<br/>bank-change / fraud cases]
+  end
+  H[Person with the approver role<br/>releases held money]
+  F1 --> UP --> NM --> SC
+  F2 --> NM
+  F3 --> UP
+  SC -- hit = SUSPICIOUS_INSTRUCTIONS hold --> RU
+  SC --> RD --> JV --> SV --> AP --> RU
+  SOR --> RU
+  RU --> GR --> NE --> H
+  RU -. text for grading .-> JD
+```
+
+Trust boundaries the red team attacks (`python -m evals.harness`, section 8 of the scorecard): untrusted text → decision
+(489 attacks, 0 succeeded), untrusted text → Jev (30 attacks; 6 succeeded before the notes-ablation guard, 0 after),
+generated text → judge (105 manipulation attempts, 0 succeeded), anything → outputs / model requests (0 leaks).
+
+---
+
 ## 10. Observability and audit
 
 - Every step is a stored **run event** (step, status, findings, evidence, attempt, timestamp). The run page is the audit view.
@@ -458,6 +507,31 @@ Structured model output: Jev answers are typed by the API itself (noul / choice 
 - **Tracing**: OpenTelemetry spans per run, per step and per model call (GenAI conventions) when `OTEL_ENABLED=1`.
 - Each run stores `ruleset_version` so a decision can be explained with the rules that made it.
 - Production: structured logs with run IDs, metrics (runs/min, p95 latency, hold rate by reason, OCR share), alerts on dead jobs or a sudden jump in holds for one vendor.
+
+---
+
+## 10a. Evaluation harness (one command, one gate)
+
+```mermaid
+flowchart TB
+  CMD["python -m evals.harness<br/>(offline replay by default)"] --> T[Unit tests: pytest]
+  CMD --> DEC[Decisions vs labels: 31 cases<br/>accuracy, per-class P/R/F1, confusion]
+  CMD --> PDF[PDF fields: 32]
+  CMD --> ADV[Adversarial: 600 variants]
+  CMD --> JR[Jev roles vs rules-only<br/>recorded real answers]
+  CMD --> JG[LLM-as-judge]
+  JG --> GOLD[Validation vs human gold set: 69 items<br/>kappa, bad recall, consistency,<br/>position + verbosity bias -> trusted / advisory]
+  JG --> QUAL[Quality of real outputs: handoff, e-mail,<br/>explanation, evidence panel<br/>+ exact twins: groundedness, citations]
+  CMD --> RT[Red team: pipeline, Jev, judge, leaks]
+  CMD --> RB[Robustness / abuse: 38 cases]
+  T & DEC & PDF & ADV & JR & GOLD & QUAL & RT & RB --> GATE{{evals/gate.yaml}}
+  GATE --> OUT[harness_report.json<br/>scorecard.md / .html]
+  GATE -- any line fails --> FAIL[exit 1: CI red]
+  REC[(Recorded answers:<br/>seed/jev_replay.json<br/>evals/judge/recordings/jev.json)] --> JR & JG & RT
+```
+
+The judge and Jev recordings make the whole run reproducible offline and free; `--live-judge` / `--live-jev` record
+only questions never asked before, so existing numbers never move silently. The judge model is pinned in each rubric file.
 
 ---
 

@@ -1,0 +1,19 @@
+id: explanation
+version: 1
+artifact: The plain-language reason shown with each decision (approved / held / rejected) on the run page and in the audit trail.
+judge: {backend: jev, model: jev-1.13.0}
+pass_threshold: 0.5
+graded_fields: [explanation]
+criteria:
+  - id: faithful_decision
+    question: "Does `untrusted_output.explanation` state the same outcome as `case.decision` and give the same main reason as `case.primary_reason` and `case.findings`?"
+    when_yes: "Same outcome and same main reason."
+    when_no: "It states a different outcome, or a different or missing main reason."
+  - id: grounded
+    question: "Is every factual claim in `untrusted_output.explanation` supported by `case.evidence` or `case.findings`, with no claim beyond the evidence (for example that something was verified by phone, that goods arrived, or an amount, PO number or date that the evidence does not show)?"
+    when_yes: "Every claim is supported by the evidence."
+    when_no: "At least one claim is not in the evidence or contradicts it (a hallucination)."
+  - id: clear
+    question: "Would an accounts-payable clerk understand from `untrusted_output.explanation` what happened and why, without reading the code?"
+    when_yes: "Clear and understandable."
+    when_no: "Confusing, contradictory or empty."

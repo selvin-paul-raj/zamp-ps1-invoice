@@ -196,10 +196,14 @@ def ingest_invoice(payload: dict[str, Any], idempotency_key: Optional[str] = Hea
 
 @app.post("/invoices/upload")
 async def upload(file: UploadFile = File(...)) -> dict[str, Any]:
-    data = await file.read()
+    from .guardrails import UPLOAD_MAX_BYTES, UploadRejected
+
+    data = await file.read(UPLOAD_MAX_BYTES + 1)  # never buffer more than the limit
     try:
         payloads = parse_upload(file.filename or "", data)
-        return {"results": [svc.ingest(p) for p in payloads]}
+        return {"results": [svc.ingest(p) for p in payloads if isinstance(p, dict)]}
+    except UploadRejected as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 

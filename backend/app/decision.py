@@ -143,16 +143,41 @@ _HANDOFF: dict[str, tuple[str, str, str, bool]] = {
     "VENDOR_BANK_RECENTLY_CHANGED": ("The vendor's bank account on file changed a few days ago and was never verified. Did the vendor really change it?", "Vendor master team", "Call the contact already on file (not any number on the invoice or the change request) and verify; until then, do not pay.", False),
     "PO_CHANGED_AFTER_INVOICE": ("The PO was edited after the invoice date. Was the change legitimate and approved?", "Buyer / procurement", "Open the PO change history, confirm who changed it and why, then approve with a note or reject.", False),
     "SUSPICIOUS_INSTRUCTIONS": ("The document contains text that tries to instruct the system. Is this a genuine invoice?", "AP", "Treat the text as a red flag; verify the invoice with the vendor through known contacts before paying.", False),
+    "NEGATIVE_AMOUNT": ("The bill has a negative line or total. Is this really a credit, and if so, against which invoice?", "AP", "Ask the vendor for a proper credit note referencing the original invoice and a bill without negative lines.", True),
+    "UNSAFE_DOCUMENT": ("The PDF carries active content (script, launch action or embedded file). Did it really come from this vendor?", "AP", "Do not open it outside the viewer; confirm the invoice with the vendor through the contact on file, then process a clean copy.", False),
     "SYSTEM_ERROR": ("Processing failed. Re-run, or review by hand?", "AP / on-call engineer", "Re-run the invoice; if it fails again, process it manually.", False),
 }
 
 
-def handoff_for(decision: Decision, invoice: Optional[Invoice] = None, vendor_name: str = "", invoice_number: str = "") -> Optional[dict]:
+# Templates that ask a generic question get the finding's own facts in front of the question (found by the LLM-as-judge:
+# "Everything matched. Do you approve payment of this amount?" named neither the amount nor the limit).
+_FACTS_FIRST = {"APPROVAL_LIMIT", "PO_NOT_FOUND", "ARITHMETIC_MISMATCH", "PO_INFERRED", "PO_MISSING", "GST_TYPE_MISMATCH", "TAX_AMOUNT_MISMATCH",
+                "MISSING_FIELD", "INVALID_GSTIN", "UNSUPPORTED_DOC_TYPE", "CREDIT_NOTE_TO_APPLY", "LINE_NOT_ON_PO", "GRN_MISSING"}
+
+
+def _pointer(code: str, evidence: Optional[list]) -> str:
+    """One line naming the record to open, taken from the evidence that supports the primary reason (deterministic)."""
+    from .evidence import SOURCE_SYSTEMS
+
+    for e in evidence or []:
+        if e.get("finding_code") == code and e.get("source_system") not in (None, "jev"):
+            name = SOURCE_SYSTEMS.get(e["source_system"], e["source_system"])
+            rec = f" {e['record_id']}" if e.get("record_id") else ""
+            return f" Evidence to open: {name}{rec} ({e.get('field')}: expected {e.get('expected')}, invoice {e.get('actual')})."
+    return ""
+
+
+def handoff_for(decision: Decision, invoice: Optional[Invoice] = None, vendor_name: str = "", invoice_number: str = "",
+                evidence: Optional[list] = None) -> Optional[dict]:
     """The one question a human must answer, who answers it, and a draft vendor email when the vendor must act."""
     if decision.decision != HOLD and decision.primary_reason not in ("DUPLICATE_INVOICE",):
         return None
     code = decision.primary_reason or ""
     q, owner, action, vendor_acts = _HANDOFF.get(code, ("Review the reasons and decide.", "AP", "Approve with a note, or reject.", False))
+    primary = next((r for r in decision.reasons if r.code == code), None)
+    if code in _FACTS_FIRST and primary is not None and primary.message:
+        q = f"{primary.message.rstrip()} {q}"
+    action = action + _pointer(code, evidence)
     vname = invoice.vendor_name if invoice else vendor_name
     num = invoice.invoice_number if invoice else invoice_number
     email = None

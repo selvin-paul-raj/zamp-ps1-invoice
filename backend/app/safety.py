@@ -29,6 +29,9 @@ _INJECTION = [
 _INJ_RX = [re.compile(p, re.I | re.M) for p in _INJECTION]
 
 _PII = [
+    ("SECRET", re.compile(r"\b(?:sk|pk|rk|proxy?|tsk|ghp|gho|xox[abp])[-_][A-Za-z0-9_\-]{12,}\b|\bBearer\s+[A-Za-z0-9._\-]{12,}")),
+    ("CARD", re.compile(r"(?<!\d)(?:\d{4}[ -]){3}\d{4}(?!\d)")),
+    ("AADHAAR", re.compile(r"(?<!\d)\d{4} \d{4} \d{4}(?!\d)")),
     ("EMAIL", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")),
     ("IFSC", re.compile(r"\b[A-Z]{4}0[A-Z0-9]{6}\b")),
     ("PAN", re.compile(r"(?<![0-9A-Z])[A-Z]{5}\d{4}[A-Z](?![0-9A-Z])")),
@@ -38,11 +41,19 @@ _PII = [
 
 
 def scan_injection(text: str) -> list[str]:
-    """Snippets of text that look like instructions aimed at an automated system."""
+    """Snippets of text that look like instructions aimed at an automated system.
+
+    Original patterns plus the guardrails scanner (unicode normalisation, homoglyphs, zero-width / bidi, encoded payloads,
+    multilingual, authority claims, exfiltration and judge manipulation). Hold-level hits only."""
+    from .guardrails import scan_untrusted
+
     hits = []
     for rx in _INJ_RX:
         for m in rx.finditer(text or ""):
             hits.append(m.group(0).strip()[:80])
+    for h in scan_untrusted(text):
+        if h["severity"] == "hold" and h["match"] not in hits:
+            hits.append(f"{h['category']}: {h['match']}"[:90])
     return hits
 
 
