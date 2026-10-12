@@ -26,7 +26,7 @@ The brief: "You'll run your process live — a happy path and the edge cases you
 | 11 | Business impact card → change 1000 to 5000 | "Every assumption is editable." | numbers update |
 
 ## If they ask you to change something live (likely)
-- **Tolerance:** in `backend/app/config.py` set `price_pct = Decimal("0.15")`, restart, re-run INV-06 (KOS-0144): it now approves. Explain why, then revert.
+- **Tolerance:** in `backend/app/config.py` set `price_pct = Decimal("0.15")`, restart, re-run INV-06 (KOS-0144): it **still holds**, because the line is ₹19,000 over and the per-line cap is ₹5,000. Then also set `price_abs_per_line = Decimal("20000")`: now it approves. Two limits (percent and rupees) is the point. Revert both.
 - **Approval gate:** start with `APPROVE_CONFIDENCE_THRESHOLD=0.96`: INV-03 (fuzzy vendor, 0.95) becomes HOLD · LOW_CONFIDENCE.
 - **Approval limit:** `APPROVAL_LIMIT_INR=50000` → several clean invoices route to the Controller.
 - **New edge case:** copy an item in `seed/make_seed.py`, change one field, `python seed/make_seed.py`, add the label, run `pytest -q`.
