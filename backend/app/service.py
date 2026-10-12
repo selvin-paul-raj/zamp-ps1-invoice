@@ -187,6 +187,8 @@ class Service:
                 return {"run_id": run_id, "decision": run.decision, "skipped": True}
             inv_row = c.execute(select(db.invoices).where(db.invoices.c.id == run.invoice_id)).first()
             c.execute(update(db.runs).where(db.runs.c.id == run_id).values(status="running", attempt=attempt, started_at=run.started_at or db.now_iso()))
+        if delay_ms is None and (inv_row.ingest_key or "").startswith("seed:"):
+            delay = min(delay, 0.04)  # bulk demo seed: fast enough to fill the dashboard in ~10 s, still visibly live
         t0 = time.perf_counter()
         inv = Invoice.from_payload(db.loads(inv_row.payload))
         md = self.master_data(exclude_invoice_id=inv_row.id, before=inv_row.received_at)
