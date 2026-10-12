@@ -8,7 +8,7 @@ The brief: "You'll run your process live — a happy path and the edge cases you
 - [ ] If they need a link: also open the hosted URL (Render) once, so it wakes up (free tier sleeps; first load ~30–60 s).
 - [ ] Click **Run demo seed**. Wait for 22 rows. Check: KPI "False approvals = 0".
 - [ ] Have these open in tabs: (1) dashboard, (2) `docs/ARCHITECTURE.md` on GitHub, (3) `backend/app/decision.py`, (4) a terminal in `backend/`.
-- [ ] Run `pytest -q` once so the output is in the terminal (38 passed).
+- [ ] Run `pytest -q` once so the output is in the terminal (39 passed).
 
 ## Running order (about 12 minutes, they will interrupt; that's good)
 | # | Click | What to say in one line | Expected |

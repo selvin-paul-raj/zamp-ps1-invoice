@@ -10,7 +10,7 @@
 | Dashboard | Run history, decisions, confidence, reasons, KPIs, exception reasons, business impact |
 | Review queue | Every hold arrives pre-investigated: one question, who should answer, next step, draft vendor email |
 | Real inputs | Text PDFs, **scanned PDFs (OCR)**, CSV, JSON; 4 sample PDFs in 3 vendor layouts |
-| Evidence it works | 38 tests; 26/26 labelled cases; 32/32 PDF fields; **0 false approvals in 600 adversarial variants** |
+| Evidence it works | 39 tests; 26/26 labelled cases; 32/32 PDF fields; **0 false approvals in 600 adversarial variants** |
 
 > All data is synthetic. No API key or paid service is needed.
 
@@ -173,7 +173,7 @@ backend/app/decision.py    rules engine, human handoff templates, explanations
 backend/app/service.py     ingest, idempotency, job queue, retries, fail-closed, reviews, stats, impact
 backend/app/main.py        FastAPI routes, SSE, worker, serves the bundled UI
 backend/seed/              synthetic vendors, POs, GRNs, history, 22 labelled invoices, pdfs/ (4 PDFs + labels)
-backend/tests/             38 tests
+backend/tests/             39 tests
 backend/evals/             labelled evals + adversarial held-out generator
 frontend/                  Next.js dashboard, live run view, review queue (static export)
 docs/                      ARCHITECTURE, ASSUMPTIONS, DEMO_RUNBOOK, ROLLOUT_30_DAYS
